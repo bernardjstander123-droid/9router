@@ -1,0 +1,17 @@
+import {pipeline,env} from '@huggingface/transformers';
+import {writeFileSync,appendFileSync} from 'node:fs';
+env.cacheDir=process.env.RUNNER_TEMP||'/tmp';
+const started=Date.now();
+const model='onnx-community/Qwen2.5-0.5B-Instruct';
+const engine=await pipeline('text-generation',model,{dtype:'q4'});
+const prompt='Write a brief, practical plan with three acceptance checks for a generic offline restaurant ordering simulator. Do not claim to have built, deployed, or tested any external system. Keep it under 120 words.';
+const r=await engine([{role:'system',content:'You are Agent 01, a limited-scope daily AI planning assistant. Use planning, test-driven design, systematic debugging, and verification. Do not invent results.'},{role:'user',content:prompt}],{max_new_tokens:190,do_sample:false});
+const content=r?.[0]?.generated_text?.at(-1)?.content;
+if(typeof content!=='string'||!content.trim())throw Error('No inference output');
+const today=new Date().toISOString();
+const report='# Agent 01 — Daily Independent Inference Check\n\n'+'Run: '+today+'\n\n'+'Model: '+model+'\n\n'+'Status: Inference succeeded. This is a planning-only check; no app changes were made.\n\n'+'## Generated suggestion\n\n'+content+'\n\n'+'Runtime: '+Math.round((Date.now()-started)/1000)+' seconds\n';
+writeFileSync('agent01-daily-report.md',report);
+if(process.env.GITHUB_STEP_SUMMARY)appendFileSync(process.env.GITHUB_STEP_SUMMARY,report);
+console.log('AGENT01_DAILY_INFERENCE_SUCCEEDED');
+console.log('AGENT01_DAILY_MODEL',model);
+console.log('AGENT01_DAILY_SECONDS',Math.round((Date.now()-started)/1000));
