@@ -1,6 +1,6 @@
 {
   "name": "agent01-own-api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,6 @@
     "@huggingface/transformers": "^3.8.1"
   },
   "engines": {
-    "node": ">=22"
+    "node": "24.x"
   }
 }
