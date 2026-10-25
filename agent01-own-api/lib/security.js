@@ -16,7 +16,7 @@ export function validateChat(body){
  if(body.stream===true)return 'Streaming is not supported by this CPU API; set stream=false';
  if(body.tools||body.tool_choice||body.functions)return 'Tool calling is not supported';
  if(body.n!==undefined&&body.n!==1)return 'Only n=1 is supported';
- if(body.model!==undefined&&body.model!=='agent01-qwen2.5-1.5b'&&body.model!=='onnx-community/Qwen2.5-1.5B-Instruct')return 'Unknown model';
+ if(body.model!==undefined&&body.model!=='agent01-local'&&body.model!=='onnx-community/Qwen2.5-0.5B-Instruct')return 'Unknown model';
  const messages=body.messages;
  if(!Array.isArray(messages)||messages.length<1||messages.length>12)return 'messages must be an array of 1–12 items';
  if(!['user','assistant','system'].includes(messages.at(-1)?.role)||messages.at(-1)?.role!=='user')return 'Last message must be a user message';
