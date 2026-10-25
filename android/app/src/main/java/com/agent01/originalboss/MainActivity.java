@@ -72,7 +72,7 @@ public class MainActivity extends Activity {
     separator();title("CREDENTIALS",18,WHITE,true);
     text("Your private API key is encrypted with Android Keystore on this device. It is never bundled into the APK or uploaded anywhere other than your authenticated API call.",MUTED,13);
     button("SAVE OWN API KEY",()->showKeyDialog(),0xff28395d);
-    button("FORGET API KEY",()->new AlertDialog.Builder(this).setTitle("Forget key?").setMessage("Remove the encrypted key stored on this device?").setNegativeButton("Cancel",null).setPositiveButton("Remove",(a,b)->{getPreferences(0).edit().remove("keycipher").remove("keyiv").apply();toast("Saved key removed");}).show(),0xff26324b);
+    button("FORGET API KEY",()->new AlertDialog.Builder(this).setTitle("Forget key?").setMessage("Remove the encrypted key stored on this device?").setNegativeButton("Cancel",null).setPositiveButton("Remove",(dialog,which)->{getPreferences(0).edit().remove("keycipher").remove("keyiv").apply();toast("Saved key removed");}).show(),0xff26324b);
     separator();title("CONNECTED TOOLS",18,WHITE,true);
     button("CHECK ALL API HEALTH",()->checkHealth(),0xff2a4169);
     button("PRIVATE AI DASHBOARD  •  SIGN IN",()->open(DASH),0xff293f5e);
