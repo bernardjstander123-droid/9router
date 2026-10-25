@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {validateChat} from '../lib/security.js';
+import {complete,MODEL_ID} from '../lib/model.js';
+assert.equal(validateChat({model:MODEL_ID,messages:[{role:'user',content:'Hi'}]}),null);
+assert.match(validateChat({messages:[{role:'user',content:'Hi'}],stream:true}),/Streaming/);
+assert.match(validateChat({messages:[{role:'assistant',content:'Hi'}]}),/Last message/);
+assert.match(validateChat({messages:[{role:'user',content:'x'.repeat(3201)}]}),/3,200/);
+assert.match(validateChat({messages:[{role:'user',content:'Hi'}],max_tokens:221}),/max_tokens/);
+assert.ok(readFileSync('api/v1/chat/completions.js','utf8').includes('authorized(req)'));
+console.log('AGENT01_API_VALIDATION_CHECKS_PASS');
+const t=Date.now();
+const answer=await complete([{role:'user',content:'What is two plus two? Answer in one sentence.'}],45);
+assert.match(answer,/\b(4|four)\b/i);
+console.log('AGENT01_API_LOCAL_INFERENCE_PASS',answer.slice(0,140),'seconds',Math.round((Date.now()-t)/1000));
