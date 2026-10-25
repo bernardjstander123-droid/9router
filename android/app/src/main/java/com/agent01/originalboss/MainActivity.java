@@ -41,6 +41,7 @@ public class MainActivity extends Activity {
   private static final String API="https://agent01-own-api.vercel.app";
   private static final String DASH="https://agent01-free-local-inference.vercel.app";
   private static final String FRONTIER="https://agent01-frontier-environment.vercel.app";
+  private static final String WORK="https://agent01-work-copilot.vercel.app";
   private static final String MCP="https://agent-01-runtime.vercel.app";
   private static final int BG=0xff09111f,PANEL=0xff162337,ACCENT=0xff5073ee,WHITE=0xffedf4ff,MUTED=0xff9eb2d2;
   private LinearLayout root; private EditText task; private TextView output,status; private Button send;
@@ -75,6 +76,7 @@ public class MainActivity extends Activity {
     button("FORGET API KEY",()->new AlertDialog.Builder(this).setTitle("Forget key?").setMessage("Remove the encrypted key stored on this device?").setNegativeButton("Cancel",null).setPositiveButton("Remove",(dialog,which)->{getPreferences(0).edit().remove("keycipher").remove("keyiv").apply();toast("Saved key removed");}).show(),0xff26324b);
     separator();title("CONNECTED TOOLS",18,WHITE,true);
     button("CHECK ALL API HEALTH",()->checkHealth(),0xff2a4169);
+    button("FIND REAL WORK & LEADS  •  COPILOT",()->open(WORK),ACCENT);
     button("PRIVATE AI DASHBOARD  •  SIGN IN",()->open(DASH),0xff293f5e);
     button("FRONTIER GPU ENVIRONMENT",()->open(FRONTIER),0xff293f5e);
     button("YOUR PERSONAL API CONSOLE",()->open(API),0xff293f5e);
@@ -104,7 +106,7 @@ public class MainActivity extends Activity {
   }
   private void checkHealth(){status.setText("Checking your deployed services…");
     new Thread(()->{StringBuilder sb=new StringBuilder();
-      String[][] services={{"Own API",API+"/health"},{"CPU/MCP",MCP+"/api/health"},{"Frontier control",FRONTIER+"/health"}};
+      String[][] services={{"Own API",API+"/health"},{"CPU/MCP",MCP+"/api/health"},{"Work Copilot",WORK+"/api/health"},{"Frontier control",FRONTIER+"/health"}};
       for(String[] s:services){try{HttpURLConnection c=connection(s[1],"GET");int code=c.getResponseCode();String body=read(c,code);String detail="";
           if(code==200){JSONObject j=new JSONObject(body);detail=j.optString("status",j.optString("model","Responding"));}sb.append(s[0]).append(": ").append(code==200?"ONLINE ":"CHECK REQUIRED ").append(code).append(" ").append(detail).append("\n");c.disconnect();
         }catch(Exception e){sb.append(s[0]).append(": UNREACHABLE\n");}}
