@@ -1,0 +1,16 @@
+{
+  "name": "agent01-own-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/smoke.mjs",
+    "test:remote": "node scripts/remote-smoke.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
