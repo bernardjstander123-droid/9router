@@ -8,9 +8,9 @@ client = OpenAI(
     api_key="YOUR_AGENT01_KEY"
 )
 reply = client.chat.completions.create(
-    model="agent01-qwen2.5-1.5b",
+    model="agent01-local",
     messages=[{"role":"user","content":"Hello, Agent 01"}],
     max_tokens=120
 )
 print(reply.choices[0].message.content)</pre><small>CPU inference is on-demand and subject to Vercel Hobby limits. Streaming, embeddings, tool calling and 24/7 workers are not included.</small></div><p><a href="https://agent01-free-local-inference.vercel.app">Private Agent 01 dashboard</a></p>
-</main><script>document.getElementById('run').onclick=async()=>{const key=document.getElementById('key').value.trim(),task=document.getElementById('task').value.trim(),result=document.getElementById('result');if(!key||!task){result.textContent='Enter both the API key and a task.';return}result.textContent='Running CPU inference…';try{const r=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'agent01-qwen2.5-1.5b',messages:[{role:'user',content:task}],max_tokens:128})});const j=await r.json();result.textContent=j.choices?.[0]?.message?.content||j.error?.message||'No response';}catch(e){result.textContent='Connection failure: '+e.message}}</script></body></html>
+</main><script>document.getElementById('run').onclick=async()=>{const key=document.getElementById('key').value.trim(),task=document.getElementById('task').value.trim(),result=document.getElementById('result');if(!key||!task){result.textContent='Enter both the API key and a task.';return}result.textContent='Running CPU inference…';try{const r=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'agent01-local',messages:[{role:'user',content:task}],max_tokens:128})});const j=await r.json();result.textContent=j.choices?.[0]?.message?.content||j.error?.message||'No response';}catch(e){result.textContent='Connection failure: '+e.message}}</script></body></html>
