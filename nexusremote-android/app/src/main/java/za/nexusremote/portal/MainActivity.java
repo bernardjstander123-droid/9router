@@ -15,6 +15,7 @@ import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -33,7 +34,6 @@ import java.nio.charset.StandardCharsets;
 
 public final class MainActivity extends Activity {
   private static final String HOME="https://nexusremote-operations.vercel.app/";
-  private static final String HOST="nexusremote-operations.vercel.app";
   private static final int BACKGROUND=0xff0b1120;
   private static final int PANEL=0xff15243b;
   private static final int ACCENT=0xff6278ff;
@@ -43,15 +43,28 @@ public final class MainActivity extends Activity {
   private TextView status;
   private ProgressBar progress;
   private String pendingTab=null;
+  private boolean pageReady=false;
+  private boolean mainFrameFailed=false;
+  private final java.util.concurrent.ExecutorService healthExecutor=java.util.concurrent.Executors.newSingleThreadExecutor();
+  private java.util.concurrent.Future<?> healthTask;
+  private int healthGeneration=0;
 
   @Override public void onCreate(Bundle state){
     super.onCreate(state);
+    if(state!=null)pendingTab=state.getString("pendingTab");
     getWindow().setStatusBarColor(BACKGROUND);
     getWindow().setNavigationBarColor(BACKGROUND);
     LinearLayout layout=new LinearLayout(this);
     layout.setOrientation(LinearLayout.VERTICAL);
     layout.setBackgroundColor(BACKGROUND);
     setContentView(layout);
+    layout.setOnApplyWindowInsetsListener((view,insets)->{
+      if(android.os.Build.VERSION.SDK_INT>=30){
+        android.graphics.Insets bars=insets.getInsets(android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout());
+        view.setPadding(bars.left,bars.top,bars.right,bars.bottom);
+      }else view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());
+      return insets;
+    });
 
     LinearLayout top=new LinearLayout(this);
     top.setOrientation(LinearLayout.VERTICAL);
@@ -70,12 +83,12 @@ public final class MainActivity extends Activity {
     status.setText("Checking hosted platform…");
     status.setTextColor(0xffa4c9e5);
     status.setTextSize(11);
-    status.setMaxLines(2);
+    status.setMaxLines(5);
     top.addView(status);
 
     HorizontalScrollView scroller=new HorizontalScrollView(this);
     scroller.setHorizontalScrollBarEnabled(false);
-    layout.addView(scroller,new LinearLayout.LayoutParams(-1,dp(51)));
+    layout.addView(scroller,new LinearLayout.LayoutParams(-1,dp(58)));
     LinearLayout tabs=new LinearLayout(this);
     tabs.setOrientation(LinearLayout.HORIZONTAL);
     tabs.setPadding(dp(8),dp(3),dp(8),dp(3));
@@ -112,22 +125,26 @@ public final class MainActivity extends Activity {
     browser.setWebViewClient(new WebViewClient(){
       @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
         Uri uri=request.getUrl();
-        if("https".equalsIgnoreCase(uri.getScheme())&&HOST.equalsIgnoreCase(uri.getHost()))return false;
-        if("https".equalsIgnoreCase(uri.getScheme()))openExternal(uri.toString());
+        if(PortalPolicy.isTrusted(uri.toString()))return false;
+        if(request.isForMainFrame()&&"https".equalsIgnoreCase(uri.getScheme()))openExternal(uri.toString());
         return true;
       }
+      @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap icon){pageReady=false;mainFrameFailed=false;}
+      @Override public void onReceivedHttpError(WebView view,WebResourceRequest request,WebResourceResponse response){
+        if(request.isForMainFrame()){mainFrameFailed=true;pageReady=false;status.setText("Portal returned HTTP "+response.getStatusCode()+". Tap RELOAD to retry.");}
+      }
       @Override public void onPageFinished(WebView view,String url){
-        if(url!=null&&url.startsWith(HOME)&&pendingTab!=null){
+        pageReady=!mainFrameFailed&&PortalPolicy.isTrusted(url);
+        if(pageReady&&pendingTab!=null){
           String tab=pendingTab;pendingTab=null;invokeTab(tab);
         }
       }
       @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError err){
-        if(request.isForMainFrame()) status.setText("Cannot reach NexusRemote. Check internet and tap RELOAD.");
+        if(request.isForMainFrame()){mainFrameFailed=true;pageReady=false;status.setText("Cannot reach NexusRemote. Check internet and tap RELOAD.");}
       }
     });
     layout.addView(browser,new LinearLayout.LayoutParams(-1,0,1f));
-    if(state!=null)browser.restoreState(state);
-    else browser.loadUrl(HOME);
+    if(state==null||browser.restoreState(state)==null)browser.loadUrl(HOME);
     checkHealth();
   }
   private void addTab(LinearLayout bar,String name,String id){
@@ -141,7 +158,7 @@ public final class MainActivity extends Activity {
     b.setOnClickListener(v->run.run());
   }
   private LinearLayout.LayoutParams buttonParams(){
-    LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,dp(43));
+    LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,dp(48));
     p.setMargins(dp(3),0,dp(3),0);
     return p;
   }
@@ -162,21 +179,24 @@ public final class MainActivity extends Activity {
   }
   private void goToTab(String tab){
     if(browser==null)return;
-    Uri uri=Uri.parse(browser.getUrl()==null?"":browser.getUrl());
-    if(!HOST.equals(uri.getHost())){
+    if(!PortalPolicy.isTrusted(browser.getUrl())){
       pendingTab=tab;
       browser.loadUrl(HOME);
-    }else invokeTab(tab);
+    }else if(!pageReady)pendingTab=tab;
+    else invokeTab(tab);
   }
   private void invokeTab(String tab){
+    if(browser==null||!PortalPolicy.isTrusted(browser.getUrl()))return;
     if(!("home".equals(tab)||"apply".equals(tab)||"worker".equals(tab)||"owner".equals(tab)))return;
-    browser.evaluateJavascript("(function(){let b=document.querySelector('[data-tab=\\\""+tab+"\\\"]');if(b){b.click();return true}return false})()",null);
+    browser.evaluateJavascript("(function(){let b=document.querySelector('[data-tab=\\\""+tab+"\\\"]');if(b){b.click();return true}return false})()",result->{if(!"true".equals(result)&&!isDestroyed())status.setText("Portal tab unavailable. Tap RELOAD or open BROWSER.");});
   }
   private void openExternal(String uri){
     try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(uri)));}catch(ActivityNotFoundException e){status.setText("No external browser is available.");}
   }
   private void checkHealth(){
-    new Thread(()->{
+    final int generation=++healthGeneration;
+    if(healthTask!=null)healthTask.cancel(true);
+    healthTask=healthExecutor.submit(()->{
       String detail;
       HttpURLConnection c=null;
       try{
@@ -188,21 +208,22 @@ public final class MainActivity extends Activity {
         if(c.getResponseCode()!=200)throw new Exception("Unexpected server response");
         try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
           byte[] buf=new byte[2048];int n;
-          while((n=in.read(buf))!=-1){out.write(buf,0,n);if(out.size()>16000)break;}
+          while((n=in.read(buf))!=-1){out.write(buf,0,n);if(out.size()>16000)throw new Exception("Health response too large");}
           JSONObject j=new JSONObject(out.toString("UTF-8"));
-          String storage=j.optString("privateStorage","");
-          boolean stripe=j.optBoolean("stripeWebhookActive",false);
-          boolean wa=j.optBoolean("whatsappAlertsActive",false);
-          boolean dialer=j.optBoolean("dialerConnected",false);
-          detail="ONLINE · Storage "+storage+" · Stripe "+(stripe?"on":"not connected")+" · WhatsApp "+(wa?"on":"not connected")+" · Dialer "+(dialer?"on":"not connected");
+          String storage=j.opt("privateStorage") instanceof String?j.getString("privateStorage"):"unknown";
+          detail="Portal reachable · Storage reported: "+storage
+            +" · Stripe: "+PortalPolicy.integrationState(j.opt("stripeWebhookActive"))
+            +" · WhatsApp: "+PortalPolicy.integrationState(j.opt("whatsappAlertsActive"))
+            +" · Dialer: "+PortalPolicy.integrationState(j.opt("dialerConnected"))
+            +" · Payouts: unknown";
         }
       }catch(Exception e){detail="Cannot verify service · check connection";}
       finally{if(c!=null)c.disconnect();}
-      final String result=detail;ui.post(()->{if(!isFinishing())status.setText(result);});
-    }).start();
+      final String result=detail;ui.post(()->{if(!isFinishing()&&!isDestroyed()&&generation==healthGeneration&&!mainFrameFailed)status.setText(result);});
+    });
   }
   private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
-  @Override protected void onSaveInstanceState(Bundle b){if(browser!=null)browser.saveState(b);super.onSaveInstanceState(b);}
+  @Override protected void onSaveInstanceState(Bundle b){b.putString("pendingTab",pendingTab);if(browser!=null)browser.saveState(b);super.onSaveInstanceState(b);}
   @Override public void onBackPressed(){if(browser!=null&&browser.canGoBack())browser.goBack();else super.onBackPressed();}
-  @Override protected void onDestroy(){if(browser!=null){browser.loadUrl("about:blank");browser.stopLoading();browser.destroy();browser=null;}super.onDestroy();}
+  @Override protected void onDestroy(){++healthGeneration;healthExecutor.shutdownNow();ui.removeCallbacksAndMessages(null);if(browser!=null){browser.loadUrl("about:blank");browser.stopLoading();browser.destroy();browser=null;}super.onDestroy();}
 }
