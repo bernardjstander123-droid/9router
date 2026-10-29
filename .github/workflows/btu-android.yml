@@ -21,14 +21,24 @@ jobs:
         with:
           distribution: zulu
           java-version: '17'
-      - name: Set up Android SDK command-line tools
-        uses: android-actions/setup-android@v3
-      - name: Install Android SDK 35
+      - name: Use preinstalled Android SDK
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
-          test -f "${ANDROID_HOME}/platforms/android-35/android.jar"
+          export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          ls -la "$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          fi
+          test -n "$SDKMANAGER" && test -x "$SDKMANAGER"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --install "platforms;android-35" "build-tools;35.0.0"
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
       - name: Set up Gradle 8.10.2
         uses: gradle/actions/setup-gradle@v4
         with:
