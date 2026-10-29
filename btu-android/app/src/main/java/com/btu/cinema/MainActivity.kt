@@ -6,6 +6,14 @@ import android.widget.TextView
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.VideoView
+import android.widget.EditText
+import android.widget.ScrollView
+import android.widget.Toast
+import android.content.Intent
+import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.view.ViewGroup
 import android.util.Log
 import android.media.MediaCodec
@@ -32,9 +40,37 @@ class MainActivity : Activity() {
             text = "BTU Cinema Encoder v0.2\\nHardware AVC test, 640×360, 30 FPS"
         }
         val runButton = Button(this).apply { text = "Render 3-second test video" }
+        val prompt = EditText(this).apply {
+            hint = "Scene prompt (saved locally, not AI inference)"
+            setSingleLine(false)
+            minLines = 2
+        }
+        val referenceButton = Button(this).apply { text = "Choose character reference image" }
+        val shareButton = Button(this).apply { text = "Share last rendered MP4" }
+        val projectDir = File(filesDir, "projects").apply { mkdirs() }
+        val referenceFile = File(projectDir, "character_reference.png")
+        val promptFile = File(projectDir, "scene_prompt.txt")
+        prompt.setText(if (promptFile.exists()) promptFile.readText() else "Ancient youthful Demon God, exactly eight wings, cinematic lighting")
+        referenceButton.setOnClickListener {
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                type = "image/*"
+                addCategory(Intent.CATEGORY_OPENABLE)
+            }, 101)
+        }
+        shareButton.setOnClickListener {
+            val video = File(getExternalFilesDir(null), "btu_hardware_test.mp4")
+            if (!video.exists()) {
+                Toast.makeText(this, "Render a video first", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Video saved at: ${video.absolutePath}", Toast.LENGTH_LONG).show()
+            }
+        }
         val player = VideoView(this)
         layout.addView(status)
+        layout.addView(prompt)
+        layout.addView(referenceButton)
         layout.addView(runButton)
+        layout.addView(shareButton)
         layout.addView(player, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 420
         ))
@@ -42,6 +78,7 @@ class MainActivity : Activity() {
         runButton.setOnClickListener {
             runButton.isEnabled = false
             player.stopPlayback()
+            promptFile.writeText(prompt.text.toString())
             status.text = "Encoding 90 frames..."
             Thread {
                 try {
@@ -67,6 +104,28 @@ class MainActivity : Activity() {
                     }
                 }
             }.start()
+        }
+    }
+    @Deprecated("Uses Android legacy activity result for minimum SDK compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 101 && resultCode == Activity.RESULT_OK) {
+            val uri = data?.data ?: return
+            try {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    val bitmap = BitmapFactory.decodeStream(input) ?: error("Unable to decode image")
+                    val scaled = Bitmap.createScaledBitmap(bitmap, 512, 512, true)
+                    File(filesDir, "projects/character_reference.png").outputStream().use {
+                        scaled.compress(Bitmap.CompressFormat.PNG, 95, it)
+                    }
+                    if (scaled !== bitmap) scaled.recycle()
+                    bitmap.recycle()
+                }
+                Toast.makeText(this, "Character reference saved locally", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Log.e(tag, "Reference import failed", e)
+                Toast.makeText(this, "Image import failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
     private fun encode(dest: File, progress: (Int) -> Unit) {
