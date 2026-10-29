@@ -21,13 +21,12 @@ jobs:
         with:
           distribution: zulu
           java-version: '17'
-      - name: Set up Android SDK using runner tools
+      - name: Set up Android SDK command-line tools
+        uses: android-actions/setup-android@v3
+      - name: Install Android SDK 35
         shell: bash
         run: |
           set -euo pipefail
-          echo "ANDROID_HOME=${ANDROID_HOME:-}"
-          command -v sdkmanager
-          yes | sdkmanager --licenses > /dev/null || test "${PIPESTATUS[1]}" -eq 0
           sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
           test -f "${ANDROID_HOME}/platforms/android-35/android.jar"
       - name: Set up Gradle 8.10.2
