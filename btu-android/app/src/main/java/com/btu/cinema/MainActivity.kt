@@ -6,10 +6,11 @@ import android.widget.TextView
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.VideoView
+import android.widget.MediaController
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.Toast
-import android.widget.MediaController
+import androidx.core.content.FileProvider
 import android.content.Intent
 import android.net.Uri
 import android.graphics.Bitmap
@@ -63,15 +64,26 @@ class MainActivity : Activity() {
             if (!video.exists()) {
                 Toast.makeText(this, "Render a video first", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Video saved at: ${video.absolutePath}", Toast.LENGTH_LONG).show()
+                try {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", video)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "video/mp4"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(intent, "Share BTU MP4"))
+                } catch (e: Exception) {
+                    Log.e(tag, "MP4 sharing failed", e)
+                    Toast.makeText(this, "Unable to share video: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
-        val player = VideoView(this).apply {
-            setMediaController(MediaController(this@MainActivity).apply { setAnchorView(this@apply) })
-            setOnErrorListener { _, what, extra ->
-                status.text = "BTU playback error: $what / $extra"
-                true
-            }
+        val player = VideoView(this)
+        player.setMediaController(MediaController(this).apply { setAnchorView(player) })
+        player.setOnErrorListener { _, what, extra ->
+            Log.e(tag, "Playback failed what=$what extra=$extra")
+            status.text = "MP4 playback failed ($what/$extra)"
+            true
         }
         layout.addView(status)
         layout.addView(prompt)
@@ -96,10 +108,19 @@ class MainActivity : Activity() {
                             status.text = "BTU encoding: $frame / 90 frames"
                         }
                     }
-                    check(dest.length() > 0) { "Generated MP4 is empty" }
                     val seconds = (System.nanoTime() - began) / 1_000_000_000.0
+                    val retriever = MediaMetadataRetriever()
+                    val details = try {
+                        retriever.setDataSource(dest.absolutePath)
+                        val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                        val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                        val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                        check(duration >= 2500L && width == 640 && height == 360) { "Invalid video metadata: ${duration}ms ${width}x${height}" }
+                        "duration=${duration}ms, ${width}x${height}"
+                    } finally { retriever.release() }
+                    Log.i("BTU_DIAGNOSTICS", "MP4 validated: $details bytes=${dest.length()}")
                     runOnUiThread {
-                        status.text = "BTU video ready: ${dest.length()} bytes in %.1fs\\n${dest.absolutePath}".format(seconds)
+                        status.text = "BTU video ready: ${dest.length()} bytes in %.1fs\\n$details\\n${dest.absolutePath}".format(seconds)
                         player.setVideoPath(dest.absolutePath)
                         player.setOnPreparedListener { it.isLooping = true; player.start() }
                         runButton.isEnabled = true
@@ -233,6 +254,7 @@ class MainActivity : Activity() {
             }
             codec.signalEndOfInputStream()
             drain(true)
+            check(started && track >= 0 && dest.length() > 0L) { "No encoded MP4 samples produced" }
             Log.i(tag, "MP4 complete bytes=${dest.length()} frames=90 codec=${codecInfo.name}")
         } finally {
             if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
