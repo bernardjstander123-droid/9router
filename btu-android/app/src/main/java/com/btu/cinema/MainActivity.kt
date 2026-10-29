@@ -1,5 +1,6 @@
 package com.btu.cinema
 
+import org.json.JSONObject
 import android.app.Activity
 import android.os.Bundle
 import android.widget.TextView
@@ -49,6 +50,7 @@ class MainActivity : Activity() {
         }
         val referenceButton = Button(this).apply { text = "Choose character reference image" }
         val shareButton = Button(this).apply { text = "Share last rendered MP4" }
+        val importButton = Button(this).apply { text = "Import BTU Studio project JSON" }
         val projectDir = File(filesDir, "projects").apply { mkdirs() }
         val referenceFile = File(projectDir, "character_reference.png")
         val promptFile = File(projectDir, "scene_prompt.txt")
@@ -88,6 +90,11 @@ class MainActivity : Activity() {
         layout.addView(status)
         layout.addView(prompt)
         layout.addView(referenceButton)
+        layout.addView(importButton)
+        importButton.setOnClickListener { openBridgePicker() }
+        if (intent?.action == Intent.ACTION_VIEW || intent?.action == Intent.ACTION_SEND) {
+            importBridgeIntent(intent)
+        }
         layout.addView(runButton)
         layout.addView(shareButton)
         layout.addView(player, LinearLayout.LayoutParams(
@@ -138,6 +145,10 @@ class MainActivity : Activity() {
     @Deprecated("Uses Android legacy activity result for minimum SDK compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 202 && resultCode == Activity.RESULT_OK) {
+            importBridgeUri(data?.data)
+            return
+        }
         if (requestCode == 101 && resultCode == Activity.RESULT_OK) {
             val uri = data?.data ?: return
             try {
@@ -157,6 +168,50 @@ class MainActivity : Activity() {
             }
         }
     }
+    private fun openBridgePicker() {
+        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            type = "application/json"
+            addCategory(Intent.CATEGORY_OPENABLE)
+        }, 202)
+    }
+
+    private fun importBridgeIntent(incoming: Intent?) {
+        val uri = when (incoming?.action) {
+            Intent.ACTION_SEND -> {
+                @Suppress("DEPRECATION")
+                incoming.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            }
+            Intent.ACTION_VIEW -> incoming.data
+            else -> null
+        }
+        importBridgeUri(uri)
+    }
+
+    private fun importBridgeUri(uri: Uri?) {
+        if (uri == null) return
+        try {
+            val bytes = contentResolver.openInputStream(uri)?.use { input ->
+                input.readBytes()
+            } ?: error("Cannot read project file")
+            require(bytes.size <= 1024 * 1024) { "Project exceeds 1 MB" }
+            val root = JSONObject(String(bytes, Charsets.UTF_8))
+            require(root.optString("format") == "BTU-Cinema-Bridge-v1") { "Unsupported bridge format" }
+            require(root.optInt("version") == 1) { "Unsupported bridge version" }
+            val project = root.getJSONObject("project")
+            val scenes = project.getJSONArray("scenes")
+            require(scenes.length() in 1..100) { "Project must contain 1–100 scenes" }
+            val dir = File(filesDir, "projects").apply { mkdirs() }
+            File(dir, "imported_bridge.json").writeBytes(bytes)
+            val first = scenes.getJSONObject(0)
+            val scenePrompt = first.optString("prompt", first.optString("title", ""))
+            File(dir, "scene_prompt.txt").writeText(scenePrompt)
+            Toast.makeText(this, "Imported ${scenes.length()} BTU scenes. Restart to load first prompt.", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Log.e(tag, "Bridge import failed", e)
+            Toast.makeText(this, "BTU import failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun encode(dest: File, progress: (Int) -> Unit) {
         val width = 640
         val height = 360
