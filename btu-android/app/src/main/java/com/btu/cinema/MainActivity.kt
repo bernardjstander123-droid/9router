@@ -3,6 +3,10 @@ package com.btu.cinema
 import android.app.Activity
 import android.os.Bundle
 import android.widget.TextView
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.VideoView
+import android.view.ViewGroup
 import android.util.Log
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
@@ -19,20 +23,53 @@ class MainActivity : Activity() {
     private val tag = "BTU_Engine_Audit"
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val status = TextView(this).apply { textSize = 18f; setPadding(32, 64, 32, 32); text = "BTU: starting hardware encode..." }
-        setContentView(status)
-        Thread {
-            try {
-                val dest = File(getExternalFilesDir(null), "btu_hardware_test.mp4")
-                encode(dest)
-                runOnUiThread { status.text = "BTU hardware MP4 generated: ${dest.absolutePath} (${dest.length()} bytes)" }
-            } catch (e: Throwable) {
-                Log.e(tag, "Encoding failed", e)
-                runOnUiThread { status.text = "BTU encode failed: ${e.message}" }
-            }
-        }.start()
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(28, 48, 28, 28)
+        }
+        val status = TextView(this).apply {
+            textSize = 18f
+            text = "BTU Cinema Encoder v0.2\\nHardware AVC test, 640×360, 30 FPS"
+        }
+        val runButton = Button(this).apply { text = "Render 3-second test video" }
+        val player = VideoView(this)
+        layout.addView(status)
+        layout.addView(runButton)
+        layout.addView(player, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 420
+        ))
+        setContentView(layout)
+        runButton.setOnClickListener {
+            runButton.isEnabled = false
+            player.stopPlayback()
+            status.text = "Encoding 90 frames..."
+            Thread {
+                try {
+                    val dest = File(getExternalFilesDir(null), "btu_hardware_test.mp4")
+                    val began = System.nanoTime()
+                    encode(dest) { frame ->
+                        if (frame % 15 == 0 || frame == 90) runOnUiThread {
+                            status.text = "BTU encoding: $frame / 90 frames"
+                        }
+                    }
+                    val seconds = (System.nanoTime() - began) / 1_000_000_000.0
+                    runOnUiThread {
+                        status.text = "BTU video ready: ${dest.length()} bytes in %.1fs\\n${dest.absolutePath}".format(seconds)
+                        player.setVideoPath(dest.absolutePath)
+                        player.setOnPreparedListener { it.isLooping = true; player.start() }
+                        runButton.isEnabled = true
+                    }
+                } catch (e: Throwable) {
+                    Log.e(tag, "Encoding failed", e)
+                    runOnUiThread {
+                        status.text = "BTU encode failed: ${e.message}"
+                        runButton.isEnabled = true
+                    }
+                }
+            }.start()
+        }
     }
-    private fun encode(dest: File) {
+    private fun encode(dest: File, progress: (Int) -> Unit) {
         val width = 640
         val height = 360
         val fps = 30
@@ -117,18 +154,19 @@ class MainActivity : Activity() {
                     }
                 }
             }
-            for (i in 0 until 30) {
-                val t = i / 29f
+            for (i in 0 until 90) {
+                val t = i / 89f
                 GLES20.glClearColor(t, 0.15f, 1f - t, 1f)
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
                 val pts = i.toLong() * 1_000_000_000L / fps
                 EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, pts)
                 check(EGL14.eglSwapBuffers(eglDisplay, eglSurface)) { "EGL swap failed: ${EGL14.eglGetError()}" }
                 drain(false)
+                progress(i + 1)
             }
             codec.signalEndOfInputStream()
             drain(true)
-            Log.i(tag, "MP4 complete bytes=${dest.length()} frames=30 codec=${codecInfo.name}")
+            Log.i(tag, "MP4 complete bytes=${dest.length()} frames=90 codec=${codecInfo.name}")
         } finally {
             if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
                 EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
