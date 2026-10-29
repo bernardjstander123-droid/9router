@@ -6,6 +6,7 @@ import android.widget.TextView
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.VideoView
+import android.widget.MediaController
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.Toast
@@ -66,6 +67,12 @@ class MainActivity : Activity() {
             }
         }
         val player = VideoView(this)
+        player.setMediaController(MediaController(this).apply { setAnchorView(player) })
+        player.setOnErrorListener { _, what, extra ->
+            Log.e(tag, "Playback failed what=$what extra=$extra")
+            status.text = "MP4 playback failed ($what/$extra)"
+            true
+        }
         layout.addView(status)
         layout.addView(prompt)
         layout.addView(referenceButton)
@@ -90,8 +97,18 @@ class MainActivity : Activity() {
                         }
                     }
                     val seconds = (System.nanoTime() - began) / 1_000_000_000.0
+                    val retriever = MediaMetadataRetriever()
+                    val details = try {
+                        retriever.setDataSource(dest.absolutePath)
+                        val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                        val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                        val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                        check(duration >= 2500L && width == 640 && height == 360) { "Invalid video metadata: ${duration}ms ${width}x${height}" }
+                        "duration=${duration}ms, ${width}x${height}"
+                    } finally { retriever.release() }
+                    Log.i("BTU_DIAGNOSTICS", "MP4 validated: $details bytes=${dest.length()}")
                     runOnUiThread {
-                        status.text = "BTU video ready: ${dest.length()} bytes in %.1fs\\n${dest.absolutePath}".format(seconds)
+                        status.text = "BTU video ready: ${dest.length()} bytes in %.1fs\\n$details\\n${dest.absolutePath}".format(seconds)
                         player.setVideoPath(dest.absolutePath)
                         player.setOnPreparedListener { it.isLooping = true; player.start() }
                         runButton.isEnabled = true
@@ -225,6 +242,7 @@ class MainActivity : Activity() {
             }
             codec.signalEndOfInputStream()
             drain(true)
+            check(started && track >= 0 && dest.length() > 0L) { "No encoded MP4 samples produced" }
             Log.i(tag, "MP4 complete bytes=${dest.length()} frames=90 codec=${codecInfo.name}")
         } finally {
             if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
