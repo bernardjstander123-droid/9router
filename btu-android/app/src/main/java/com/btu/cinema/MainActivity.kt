@@ -10,6 +10,7 @@ import android.widget.MediaController
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import android.content.Intent
 import android.net.Uri
 import android.graphics.Bitmap
@@ -63,7 +64,18 @@ class MainActivity : Activity() {
             if (!video.exists()) {
                 Toast.makeText(this, "Render a video first", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Video saved at: ${video.absolutePath}", Toast.LENGTH_LONG).show()
+                try {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", video)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "video/mp4"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(intent, "Share BTU MP4"))
+                } catch (e: Exception) {
+                    Log.e(tag, "MP4 sharing failed", e)
+                    Toast.makeText(this, "Unable to share video: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
         val player = VideoView(this)
