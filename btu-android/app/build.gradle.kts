@@ -4,3 +4,4 @@ android { namespace = "com.btu.cinema"; compileSdk = 35
  defaultConfig { applicationId = "com.btu.cinema"; minSdk = 29; targetSdk = 35; versionCode = 1; versionName = "0.1" }
     kotlinOptions { jvmTarget = "17" }
 }
+dependencies { implementation("androidx.core:core:1.15.0") }
