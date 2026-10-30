@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.22)
+project(realmforge_native LANGUAGES CXX)
+add_library(realmforge_native SHARED native_renderer.cpp)
+target_compile_features(realmforge_native PRIVATE cxx_std_17)
+target_link_libraries(realmforge_native GLESv3 EGL log)
