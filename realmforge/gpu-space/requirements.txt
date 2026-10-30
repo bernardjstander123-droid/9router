@@ -1,0 +1,3 @@
+spaces
+gradio>=4,<6
+torch
