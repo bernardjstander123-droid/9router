@@ -37,6 +37,14 @@ jobs:
         run: |
           test -s sponsie-native/app/build/outputs/apk/debug/app-debug.apk
           sha256sum sponsie-native/app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify APK signature and package identity
+        run: |
+          APK=sponsie-native/app/build/outputs/apk/debug/app-debug.apk
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print -quit)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose "$APK"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt -print -quit)"
+          "$AAPT" dump badging "$APK" | grep -E '^package:|^sdkVersion:|^targetSdkVersion:'
       - uses: actions/upload-artifact@v4
         with:
           name: Sponsie-Native-Android-Debug-APK
