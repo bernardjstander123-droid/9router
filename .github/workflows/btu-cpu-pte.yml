@@ -1,0 +1,38 @@
+name: BTU CPU PTE export
+on:
+  push:
+    branches: [fix/btu-cpu-pte-export]
+    paths:
+      - 'btu-android/tools/build_cpu_pte.py'
+      - '.github/workflows/btu-cpu-pte.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install compatible ExecuTorch and PyTorch
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install executorch
+          python -m pip check
+      - name: Verify installed backend
+        run: |
+          python -c "import torch, executorch; from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner; print('torch', torch.__version__)"
+      - name: Export BTU CPU test model
+        run: python btu-android/tools/build_cpu_pte.py --output dist/btu_cinema_inference.pte
+      - name: Validate artifact
+        run: |
+          test -s dist/btu_cinema_inference.pte
+          sha256sum dist/btu_cinema_inference.pte
+      - name: Upload PTE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: btu-cpu-test-pte
+          path: dist/btu_cinema_inference.pte
+          if-no-files-found: error
