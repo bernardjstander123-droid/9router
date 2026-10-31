@@ -57,10 +57,10 @@ class WorkerTests(unittest.TestCase):
                 "wings": 8, "output_uri": ""}}
             config = {"output_root": root}
             with patch.object(worker, "render_job", return_value=destination), \
-                 patch.object(worker, "request_json", return_value={}) as req, \
+                 patch.object(worker, "request_json", side_effect=[{}, {"data": {"payload": {"render_status": "rendered_local", "output_uri": ""}}}]) as req, \
                  patch.dict(os.environ, {"BTU_OUTPUT_BASE_URL": ""}):
                 worker.process_record(job, api="https://api.example.test", token="test", config=config)
-            updated = req.call_args.kwargs["payload"]
+            updated = req.call_args_list[0].kwargs["payload"]
             self.assertEqual(updated["render_status"], "rendered_local")
             self.assertEqual(updated["output_uri"], "")
 
@@ -79,6 +79,21 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(cursor, "cursor-2")
             self.assertFalse(more)
             process.assert_called_once()
+
+    def test_readback_failure_keeps_job_unconfirmed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            destination = root / "scene.mp4"
+            destination.write_bytes(b"mock-output")
+            job = {"id": "record", "status": "success",
+                   "payload": {"render_status": "queued", "wings": 8}}
+            with patch.object(worker, "render_job", return_value=destination), \
+                 patch.object(worker, "request_json", return_value={"data": {"payload": {
+                     "render_status": "queued"}}}), \
+                 patch.object(worker.time, "sleep"):
+                with self.assertRaises(RuntimeError):
+                    worker.process_record(job, api="https://example.test", token="test",
+                                          config={"output_root": root})
 
     def test_first_poll_since_and_existing_cursor_precedence(self):
         response = {"data": [], "pagination": {"poll_cursor": "new-cursor"}}
