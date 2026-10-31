@@ -178,23 +178,18 @@ def process_record(job, *, api, token, config):
     if job.get("status") != "success" or job.get("payload", {}).get("render_status") != "queued":
         return
     payload = job["payload"].copy()
-    # Never publish a local file URI as a remotely playable episode.
-    output_base = os.environ.get("BTU_OUTPUT_BASE_URL", "").rstrip("/")
     try:
         path = render_job(job, **config)
-        if output_base.startswith("https://"):
-            uri = output_base + "/" + urllib.parse.quote(
-                path.relative_to(config["output_root"]).as_posix(), safe="/")
-            payload.update(render_status="completed", output_uri=uri)
-        else:
-            payload.update(render_status="rendered_local", output_uri="")
     except (ValueError, FileNotFoundError, TimeoutError, RuntimeError,
             urllib.error.URLError, subprocess.CalledProcessError) as exc:
-        print(f"Render blocked/failed for {job['id']}: {type(exc).__name__}: {exc}", flush=True)
-        payload.update(render_status="blocked", output_uri="")
+        print(f"Render not completed for {job['id']}: {type(exc).__name__}: {exc}", flush=True)
+        # Do not update the record or advance the poll cursor. A missing GPU,
+        # reference image or temporary failure can be fixed and retried.
+        raise
+    # A worker-local file is not an Android-accessible or public episode.
+    payload.update(render_status="rendered_local", output_uri="")
     request_json(api.rstrip("/") + "/" + urllib.parse.quote(job["id"]), method="PUT",
                  payload=payload, token=token)
-
 
 def poll_once(*, api, token, cursor, config):
     params = {"limit": 30}
