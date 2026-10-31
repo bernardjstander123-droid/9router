@@ -57,10 +57,10 @@ class WorkerTests(unittest.TestCase):
                 "wings": 8, "output_uri": ""}}
             config = {"output_root": root}
             with patch.object(worker, "render_job", return_value=destination), \
-                 patch.object(worker, "request_json", return_value={}) as req, \
+                 patch.object(worker, "request_json", side_effect=[{}, {"data": {"payload": {"render_status": "rendered_local", "output_uri": ""}}}]) as req, \
                  patch.dict(os.environ, {"BTU_OUTPUT_BASE_URL": ""}):
                 worker.process_record(job, api="https://api.example.test", token="test", config=config)
-            updated = req.call_args.kwargs["payload"]
+            updated = req.call_args_list[0].kwargs["payload"]
             self.assertEqual(updated["render_status"], "rendered_local")
             self.assertEqual(updated["output_uri"], "")
 
@@ -79,6 +79,43 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(cursor, "cursor-2")
             self.assertFalse(more)
             process.assert_called_once()
+
+    def test_readback_failure_keeps_job_unconfirmed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            destination = root / "scene.mp4"
+            destination.write_bytes(b"mock-output")
+            job = {"id": "record", "status": "success",
+                   "payload": {"render_status": "queued", "wings": 8}}
+            with patch.object(worker, "render_job", return_value=destination), \
+                 patch.object(worker, "request_json", return_value={"data": {"payload": {
+                     "render_status": "queued"}}}), \
+                 patch.object(worker.time, "sleep"):
+                with self.assertRaises(RuntimeError):
+                    worker.process_record(job, api="https://example.test", token="test",
+                                          config={"output_root": root})
+
+    def test_first_poll_since_and_existing_cursor_precedence(self):
+        response = {"data": [], "pagination": {"poll_cursor": "new-cursor"}}
+        with patch.object(worker, "request_json", return_value=response) as api:
+            worker.poll_once(api="https://example.test", token="test", cursor=None,
+                             config={}, since="2026-10-29")
+            self.assertIn("since=2026-10-29", api.call_args.args[0])
+            worker.poll_once(api="https://example.test", token="test", cursor="old-cursor",
+                             config={}, since="2026-10-29")
+            self.assertIn("cursor=old-cursor", api.call_args.args[0])
+            self.assertNotIn("since=", api.call_args.args[0])
+
+    def test_render_failure_does_not_advance_cursor_or_update_queue(self):
+        queued = {"id": "record", "status": "success",
+                  "payload": {"render_status": "queued", "wings": 8}}
+        response = {"data": [queued], "pagination": {"poll_cursor": "cursor-2"}}
+        with patch.object(worker, "request_json", return_value=response) as api, \
+             patch.object(worker, "render_job", side_effect=FileNotFoundError("original image missing")):
+            with self.assertRaises(FileNotFoundError):
+                worker.poll_once(api="https://example.test", token="test",
+                                 cursor="cursor-1", config={})
+        self.assertEqual(api.call_count, 1)  # no PUT and no returned cursor
 
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpeg required")
     def test_probe_rejects_short_or_wrong_size(self):

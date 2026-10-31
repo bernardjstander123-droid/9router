@@ -178,28 +178,35 @@ def process_record(job, *, api, token, config):
     if job.get("status") != "success" or job.get("payload", {}).get("render_status") != "queued":
         return
     payload = job["payload"].copy()
-    # Never publish a local file URI as a remotely playable episode.
-    output_base = os.environ.get("BTU_OUTPUT_BASE_URL", "").rstrip("/")
     try:
         path = render_job(job, **config)
-        if output_base.startswith("https://"):
-            uri = output_base + "/" + urllib.parse.quote(
-                path.relative_to(config["output_root"]).as_posix(), safe="/")
-            payload.update(render_status="completed", output_uri=uri)
-        else:
-            payload.update(render_status="rendered_local", output_uri="")
     except (ValueError, FileNotFoundError, TimeoutError, RuntimeError,
             urllib.error.URLError, subprocess.CalledProcessError) as exc:
-        print(f"Render blocked/failed for {job['id']}: {type(exc).__name__}: {exc}", flush=True)
-        payload.update(render_status="blocked", output_uri="")
-    request_json(api.rstrip("/") + "/" + urllib.parse.quote(job["id"]), method="PUT",
-                 payload=payload, token=token)
+        print(f"Render not completed for {job['id']}: {type(exc).__name__}: {exc}", flush=True)
+        # Do not update the record or advance the poll cursor. A missing GPU,
+        # reference image or temporary failure can be fixed and retried.
+        raise
+    # A worker-local file is not an Android-accessible or public episode.
+    payload.update(render_status="rendered_local", output_uri="")
+    record_url = api.rstrip("/") + "/" + urllib.parse.quote(job["id"])
+    request_json(record_url, method="PUT", payload=payload, token=token)
+    # 3Min PUT is asynchronous (202); do not advance the cursor until
+    # the updated record is actually readable with the expected status.
+    for attempt in range(8):
+        if attempt:
+            time.sleep(2)
+        current = request_json(record_url, token=token)
+        stored = current.get("data", {}).get("payload", {})
+        if stored.get("render_status") == "rendered_local" and stored.get("output_uri") == "":
+            return
+    raise RuntimeError("3Min update not confirmed; retain cursor and retry")
 
-
-def poll_once(*, api, token, cursor, config):
+def poll_once(*, api, token, cursor, config, since=None):
     params = {"limit": 30}
     if cursor:
         params["cursor"] = cursor
+    elif since:
+        params["since"] = since
     response = request_json(api.rstrip("/") + "/poll?" + urllib.parse.urlencode(params), token=token)
     # The REST response shape is {data:[records], pagination:{...}}.
     for job in response.get("data", []):
@@ -224,6 +231,7 @@ def main():
     parser.add_argument("--timeout", type=int, default=1800)
     parser.add_argument("--interval", type=int, default=300)
     parser.add_argument("--loop", action="store_true")
+    parser.add_argument("--since", help="UTC YYYY-MM-DD on first poll only; ignored once cursor exists")
     args = parser.parse_args()
     token = os.environ.get("BTU_3MIN_API_KEY", "")
     if not token.startswith("tm_test_"):
@@ -239,7 +247,7 @@ def main():
                   output_root=args.output_root.resolve(), timeout=args.timeout)
     while True:
         state = json.loads(args.state_file.read_text()) if args.state_file.exists() else {}
-        cursor, has_more = poll_once(api=args.api, token=token, cursor=state.get("cursor"), config=config)
+        cursor, has_more = poll_once(api=args.api, token=token, cursor=state.get("cursor"), config=config, since=args.since)
         args.state_file.parent.mkdir(parents=True, exist_ok=True)
         temp = args.state_file.with_suffix(".tmp")
         temp.write_text(json.dumps({"cursor": cursor}), encoding="utf-8")
