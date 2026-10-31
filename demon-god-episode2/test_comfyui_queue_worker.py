@@ -80,6 +80,17 @@ class WorkerTests(unittest.TestCase):
             self.assertFalse(more)
             process.assert_called_once()
 
+    def test_render_failure_does_not_advance_cursor_or_update_queue(self):
+        queued = {"id": "record", "status": "success",
+                  "payload": {"render_status": "queued", "wings": 8}}
+        response = {"data": [queued], "pagination": {"poll_cursor": "cursor-2"}}
+        with patch.object(worker, "request_json", return_value=response) as api, \
+             patch.object(worker, "render_job", side_effect=FileNotFoundError("original image missing")):
+            with self.assertRaises(FileNotFoundError):
+                worker.poll_once(api="https://example.test", token="test",
+                                 cursor="cursor-1", config={})
+        self.assertEqual(api.call_count, 1)  # no PUT and no returned cursor
+
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpeg required")
     def test_probe_rejects_short_or_wrong_size(self):
         with tempfile.TemporaryDirectory() as td:
