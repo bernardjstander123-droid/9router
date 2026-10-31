@@ -80,6 +80,17 @@ class WorkerTests(unittest.TestCase):
             self.assertFalse(more)
             process.assert_called_once()
 
+    def test_first_poll_since_and_existing_cursor_precedence(self):
+        response = {"data": [], "pagination": {"poll_cursor": "new-cursor"}}
+        with patch.object(worker, "request_json", return_value=response) as api:
+            worker.poll_once(api="https://example.test", token="test", cursor=None,
+                             config={}, since="2026-10-29")
+            self.assertIn("since=2026-10-29", api.call_args.args[0])
+            worker.poll_once(api="https://example.test", token="test", cursor="old-cursor",
+                             config={}, since="2026-10-29")
+            self.assertIn("cursor=old-cursor", api.call_args.args[0])
+            self.assertNotIn("since=", api.call_args.args[0])
+
     def test_render_failure_does_not_advance_cursor_or_update_queue(self):
         queued = {"id": "record", "status": "success",
                   "payload": {"render_status": "queued", "wings": 8}}
