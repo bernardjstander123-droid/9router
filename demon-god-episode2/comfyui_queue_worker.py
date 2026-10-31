@@ -164,7 +164,11 @@ def render_job(job, *, comfy_url, template, prompt_node, image_node,
             if status.get("completed") or entry.get("outputs"):
                 video_entry = find_video_output(entry)
                 download_video(comfy_url, video_entry, destination)
-                verify_video(destination, min_seconds=duration, width=width, height=height)
+                try:
+                    verify_video(destination, min_seconds=duration, width=width, height=height)
+                except (ValueError, FileNotFoundError, subprocess.CalledProcessError):
+                    destination.unlink(missing_ok=True)  # invalid clip must not block retries
+                    raise
                 return destination
         time.sleep(5)
     raise TimeoutError("ComfyUI render timed out; inspect server history before retrying")
