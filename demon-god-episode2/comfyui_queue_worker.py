@@ -191,10 +191,12 @@ def process_record(job, *, api, token, config):
     request_json(api.rstrip("/") + "/" + urllib.parse.quote(job["id"]), method="PUT",
                  payload=payload, token=token)
 
-def poll_once(*, api, token, cursor, config):
+def poll_once(*, api, token, cursor, config, since=None):
     params = {"limit": 30}
     if cursor:
         params["cursor"] = cursor
+    elif since:
+        params["since"] = since
     response = request_json(api.rstrip("/") + "/poll?" + urllib.parse.urlencode(params), token=token)
     # The REST response shape is {data:[records], pagination:{...}}.
     for job in response.get("data", []):
@@ -219,6 +221,7 @@ def main():
     parser.add_argument("--timeout", type=int, default=1800)
     parser.add_argument("--interval", type=int, default=300)
     parser.add_argument("--loop", action="store_true")
+    parser.add_argument("--since", help="UTC YYYY-MM-DD on first poll only; ignored once cursor exists")
     args = parser.parse_args()
     token = os.environ.get("BTU_3MIN_API_KEY", "")
     if not token.startswith("tm_test_"):
@@ -234,7 +237,7 @@ def main():
                   output_root=args.output_root.resolve(), timeout=args.timeout)
     while True:
         state = json.loads(args.state_file.read_text()) if args.state_file.exists() else {}
-        cursor, has_more = poll_once(api=args.api, token=token, cursor=state.get("cursor"), config=config)
+        cursor, has_more = poll_once(api=args.api, token=token, cursor=state.get("cursor"), config=config, since=args.since)
         args.state_file.parent.mkdir(parents=True, exist_ok=True)
         temp = args.state_file.with_suffix(".tmp")
         temp.write_text(json.dumps({"cursor": cursor}), encoding="utf-8")
