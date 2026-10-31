@@ -28,9 +28,9 @@ python comfyui_queue_worker.py \
 
 Change 6 and 10 to the actual node IDs in your exported workflow. The image loader must influence the video generation pipeline; merely having an unconnected image loader does not preserve identity. For each queued job, the worker resolves local://projects/character_reference.png relative to --reference-root, uploads it to ComfyUI, patches the API workflow, submits a prompt, waits for completion, downloads the output and checks its duration and dimensions with ffprobe.
 
-A job with wings != 8, missing reference, unsupported dimensions, no actual video, or a failed ComfyUI workflow is not marked completed. It is marked blocked for inspection. The worker saves the 3Min polling cursor only after processing the page. The API may delay new records by ~60 seconds; --interval 300 reduces polling quota use.
+A job with wings != 8, missing reference, unsupported dimensions, no actual video, or a failed ComfyUI workflow is not marked completed. The worker leaves the job queued and does not advance its 3Min polling cursor; it can retry after the missing reference, model or GPU is installed. The worker saves the cursor only after successful processing of the page. The API may delay new records by ~60 seconds; --interval 300 reduces polling quota use.
 
-A successfully rendered file is marked rendered_local with an empty output_uri unless BTU_OUTPUT_BASE_URL points to an **already configured** HTTPS file server. The worker does not upload videos to that server. Configure that server to serve exactly --output-root before setting the URL; otherwise the returned link will not work. A completed queue status is therefore only a metadata claim, not remote playback verification. Verify HTTP access and playback separately.
+A successfully rendered file is marked rendered_local with an empty output_uri. It is a **worker-local shot only**. The worker deliberately does not mark a job completed or advertise a public URL without an independently verified delivery and playback path. Serving files to Android requires a separate authenticated file transfer or server.
 
 ## Limits and safety
 
