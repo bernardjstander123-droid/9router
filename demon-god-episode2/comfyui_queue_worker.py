@@ -188,8 +188,18 @@ def process_record(job, *, api, token, config):
         raise
     # A worker-local file is not an Android-accessible or public episode.
     payload.update(render_status="rendered_local", output_uri="")
-    request_json(api.rstrip("/") + "/" + urllib.parse.quote(job["id"]), method="PUT",
-                 payload=payload, token=token)
+    record_url = api.rstrip("/") + "/" + urllib.parse.quote(job["id"])
+    request_json(record_url, method="PUT", payload=payload, token=token)
+    # 3Min PUT is asynchronous (202); do not advance the cursor until
+    # the updated record is actually readable with the expected status.
+    for attempt in range(8):
+        if attempt:
+            time.sleep(2)
+        current = request_json(record_url, token=token)
+        stored = current.get("data", {}).get("payload", {})
+        if stored.get("render_status") == "rendered_local" and stored.get("output_uri") == "":
+            return
+    raise RuntimeError("3Min update not confirmed; retain cursor and retry")
 
 def poll_once(*, api, token, cursor, config, since=None):
     params = {"limit": 30}
