@@ -143,7 +143,7 @@ public final class MainActivity extends Activity {
     String[] actions = {
       "Open Figma online", "Open Canva online",
       "SceneForge Canva UI style guide", "SceneForge Canva VFX overlay",
-      "Share latest SceneForge export"
+      "Ansvar security and compliance", "Share latest SceneForge export"
     };
     new AlertDialog.Builder(this)
       .setTitle("SceneForge • Design tools")
@@ -152,6 +152,7 @@ public final class MainActivity extends Activity {
         else if (which == 1) openExternalDesign("https://www.canva.com/");
         else if (which == 2) openExternalDesign("https://www.canva.com/d/vyGKmbd0UzgT-LK");
         else if (which == 3) openExternalDesign("https://www.canva.com/d/igpGFVAkFKn8xrU");
+        else if (which == 4) openExternalDesign("https://ansvar.eu/docs/quickstart");
         else shareLatestExport();
       })
       .show();
