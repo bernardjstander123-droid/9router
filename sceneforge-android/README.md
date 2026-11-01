@@ -7,6 +7,8 @@ Web editor: https://sceneforge-studio.hatchable.site
 
 After a SceneForge PNG, WebM or MP4 is exported, the launcher can open Android's native share chooser for that saved file on Android 10+. Whether Canva or Figma appears as a receiving app depends on installed apps and OS support. Opening the online sites and invoking the share chooser are not equivalent to a Canva API integration, Figma API integration, automatic synchronization, or direct upload. There are no tokens embedded in the APK.
 
+The **Ansvar security and compliance** menu entry opens Ansvar Gateway's official setup information in the external browser. Live compliance lookups are available separately through the owner's connected ChatGPT Ansvar Gateway; in-app OAuth/MCP calls have not been implemented. See [ONLINE_DESIGN_COMPLIANCE.md](ONLINE_DESIGN_COMPLIANCE.md) for security limitations.
+
 **Offline editing:** Not included. The SceneForge website and linked design tools require internet and applicable account sign-in. The wrapper allows camera/video permission only for the trusted SceneForge origin.
 Android System WebView provides the site's compositing and WebGL support where available. MediaStore attempts to save WebView-generated PNG, WebM or MP4 blob exports in Downloads/SceneForge. Actual playback and camera capture must be verified on the device.
 Only supported MIME types, safe names and a 30 MB limit are accepted by the file-export bridge. The bridge has no filesystem-read or command-execution capability. The app disables cleartext requests and backup.
