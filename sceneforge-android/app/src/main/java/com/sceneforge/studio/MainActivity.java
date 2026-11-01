@@ -140,12 +140,18 @@ public final class MainActivity extends Activity {
   }
 
   private void openDesignTools() {
-    String[] actions = {"Open Figma online", "Open Canva online", "Share latest SceneForge export"};
+    String[] actions = {
+      "Open Figma online", "Open Canva online",
+      "SceneForge Canva UI style guide", "SceneForge Canva VFX overlay",
+      "Share latest SceneForge export"
+    };
     new AlertDialog.Builder(this)
       .setTitle("SceneForge • Design tools")
       .setItems(actions, (dialog, which) -> {
         if (which == 0) openExternalDesign("https://www.figma.com/files/");
         else if (which == 1) openExternalDesign("https://www.canva.com/");
+        else if (which == 2) openExternalDesign("https://www.canva.com/d/vyGKmbd0UzgT-LK");
+        else if (which == 3) openExternalDesign("https://www.canva.com/d/igpGFVAkFKn8xrU");
         else shareLatestExport();
       })
       .show();
