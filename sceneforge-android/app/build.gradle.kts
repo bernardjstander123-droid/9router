@@ -6,8 +6,8 @@ android {
         applicationId = "com.sceneforge.studio"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "0.14-debug"
+        versionCode = 15
+        versionName = "0.15-debug"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
