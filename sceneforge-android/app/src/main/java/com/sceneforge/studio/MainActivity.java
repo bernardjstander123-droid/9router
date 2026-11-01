@@ -87,7 +87,7 @@ public final class MainActivity extends Activity {
     }
     web.setWebViewClient(new WebViewClient(){
       @Override public void onPageFinished(WebView view, String url) {
-        if (isTrustedHost(Uri.parse(url))
+        if (isTrustedHost(Uri.parse(url)) && isCurrentTrustedPage()
             && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
           // Compat shim preserves the site's SceneForgeSave.save(dataUrl,filename) contract.
           // It is created only in the verified main frame. The native endpoint rejects subframes.
@@ -100,7 +100,7 @@ public final class MainActivity extends Activity {
       }
       @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
         Uri uri = Uri.parse(url);
-        if (!isTrustedHost(uri)) {
+        if (!isTrustedNavigation(uri)) {
           view.stopLoading();
           if ("https".equalsIgnoreCase(uri.getScheme())) openExternalDesign(url);
         }
@@ -108,7 +108,7 @@ public final class MainActivity extends Activity {
       @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
         if(!request.isForMainFrame())return false;
         Uri uri=request.getUrl();
-        if(isTrustedHost(uri))return false;
+        if(isTrustedNavigation(uri))return false;
         if(!"https".equalsIgnoreCase(uri.getScheme()))return true;
         try{startActivity(new Intent(Intent.ACTION_VIEW,uri));}
         catch(Exception e){show("No browser available for external link.");}
@@ -226,6 +226,14 @@ public final class MainActivity extends Activity {
   }
   private boolean isCurrentTrustedPage() {
     return web != null && web.getUrl() != null && isTrustedHost(Uri.parse(web.getUrl()));
+  }
+  private boolean isTrustedNavigation(Uri uri) {
+    if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())) return false;
+    if (uri.getUserInfo() != null || (uri.getPort() != -1 && uri.getPort() != 443)) return false;
+    String host = uri.getHost();
+    if (host == null) return false;
+    return APP_HOST.equalsIgnoreCase(host) || "hatchable.com".equalsIgnoreCase(host)
+        || host.toLowerCase(java.util.Locale.ROOT).endsWith(".hatchable.com");
   }
 
   private void downloadBlob(String url,String mimeType){
