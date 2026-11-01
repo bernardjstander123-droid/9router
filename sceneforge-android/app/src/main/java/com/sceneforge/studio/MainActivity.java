@@ -2,6 +2,7 @@ package com.sceneforge.studio;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.ContentValues;
 import android.content.Context;
@@ -25,6 +26,9 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.JavascriptInterface;
 import android.widget.Toast;
+import android.widget.FrameLayout;
+import android.widget.Button;
+import android.view.Gravity;
 import org.json.JSONObject;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -41,6 +45,8 @@ public final class MainActivity extends Activity {
   private WebView web;
   private ValueCallback<Uri[]> fileCallback;
   private PermissionRequest cameraRequest;
+  private volatile Uri latestExportUri;
+  private volatile String latestExportMime;
 
   @Override public void onCreate(Bundle savedInstanceState){
     super.onCreate(savedInstanceState);
@@ -114,8 +120,56 @@ public final class MainActivity extends Activity {
         }catch(Exception e){show("Download failed.");}
       }else show("Unsupported download source.");
     });
-    setContentView(web);
+    FrameLayout root = new FrameLayout(this);
+    root.addView(web, new FrameLayout.LayoutParams(-1, -1));
+    Button design = new Button(this);
+    design.setText("Design tools");
+    design.setTextAllCaps(false);
+    design.setContentDescription("Open Figma and Canva design tools");
+    design.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff363f80));
+    design.setTextColor(0xffffffff);
+    FrameLayout.LayoutParams toolsLayout = new FrameLayout.LayoutParams(
+        (int)(122 * getResources().getDisplayMetrics().density),
+        (int)(48 * getResources().getDisplayMetrics().density));
+    toolsLayout.gravity = Gravity.BOTTOM | Gravity.END;
+    toolsLayout.setMargins(0, 0, 12, 18);
+    root.addView(design, toolsLayout);
+    design.setOnClickListener(v -> openDesignTools());
+    setContentView(root);
     web.loadUrl(APP_URL);
+  }
+
+  private void openDesignTools() {
+    String[] actions = {"Open Figma online", "Open Canva online", "Share latest SceneForge export"};
+    new AlertDialog.Builder(this)
+      .setTitle("SceneForge • Design tools")
+      .setItems(actions, (dialog, which) -> {
+        if (which == 0) openExternalDesign("https://www.figma.com/files/");
+        else if (which == 1) openExternalDesign("https://www.canva.com/");
+        else shareLatestExport();
+      })
+      .show();
+  }
+
+  private void openExternalDesign(String url) {
+    // External websites must never load inside the privileged export-bridge WebView.
+    try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
+    catch (Exception e) { show("No browser available to open design tool."); }
+  }
+
+  private void shareLatestExport() {
+    Uri uri = latestExportUri;
+    String mime = latestExportMime;
+    if (uri == null || mime == null) {
+      show("Export PNG or video first, then open Design tools to share.");
+      return;
+    }
+    Intent send = new Intent(Intent.ACTION_SEND);
+    send.setType(mime);
+    send.putExtra(Intent.EXTRA_STREAM, uri);
+    send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    try { startActivity(Intent.createChooser(send, "Share SceneForge export")); }
+    catch (Exception e) { show("Share failed. Open Downloads/SceneForge."); }
   }
 
   private boolean isTrustedHost(Uri uri){
@@ -167,6 +221,8 @@ public final class MainActivity extends Activity {
             }
             vals.clear();vals.put(MediaStore.Downloads.IS_PENDING,0);
             getContentResolver().update(dest,vals,null,null);
+            latestExportUri = dest;
+            latestExportMime = mime;
           }else{
             File dir=new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),"SceneForge");
             if(!dir.exists()&&!dir.mkdirs())throw new IllegalStateException("Cannot create directory");
