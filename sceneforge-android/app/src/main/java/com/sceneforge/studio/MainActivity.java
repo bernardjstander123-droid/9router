@@ -24,7 +24,10 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.webkit.JavascriptInterface;
+import androidx.webkit.WebMessageCompat;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
+import java.util.Collections;
 import android.widget.Toast;
 import android.widget.FrameLayout;
 import android.widget.Button;
@@ -64,8 +67,44 @@ public final class MainActivity extends Activity {
     settings.setMediaPlaybackRequiresUserGesture(true);
     CookieManager.getInstance().setAcceptCookie(true);
     web.setBackgroundColor(0xff080a16);
-    web.addJavascriptInterface(new ExportBridge(),"SceneForgeSave");
+    // Native export endpoint is injected only into the owner-controlled HTTPS origin.
+    // Other frames, including third-party embeds, cannot message the native side.
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+      WebViewCompat.addWebMessageListener(web, "SceneForgeNative",
+          Collections.singleton(APP_URL), (view, message, sourceOrigin, isMainFrame, replyProxy) -> {
+        if (!isMainFrame || !isTrustedHost(sourceOrigin) || !isCurrentTrustedPage()) return;
+        String payload = message.getData();
+        if (payload == null || payload.length() > 42000100) return;
+        try {
+          JSONObject data = new JSONObject(payload);
+          saveExport(data.optString("data", ""), data.optString("filename", "SceneForge-export"));
+        } catch (Exception ignored) {
+          show("Invalid export message.");
+        }
+      });
+    } else {
+      show("Update Android System WebView to enable native exports.");
+    }
     web.setWebViewClient(new WebViewClient(){
+      @Override public void onPageFinished(WebView view, String url) {
+        if (isTrustedHost(Uri.parse(url))
+            && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+          // Compat shim preserves the site's SceneForgeSave.save(dataUrl,filename) contract.
+          // It is created only in the verified main frame. The native endpoint rejects subframes.
+          String shim = "(function(){window.SceneForgeSave={save:function(data,filename){"
+              + "if(typeof data==='string'&&data.length<=42000000){"
+              + "window.SceneForgeNative.postMessage(JSON.stringify({data:data,filename:filename||'SceneForge-export'}));"
+              + "}}};})();";
+          view.evaluateJavascript(shim, null);
+        }
+      }
+      @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
+        Uri uri = Uri.parse(url);
+        if (!isTrustedHost(uri)) {
+          view.stopLoading();
+          if ("https".equalsIgnoreCase(uri.getScheme())) openExternalDesign(url);
+        }
+      }
       @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
         if(!request.isForMainFrame())return false;
         Uri uri=request.getUrl();
@@ -179,16 +218,18 @@ public final class MainActivity extends Activity {
     catch (Exception e) { show("Share failed. Open Downloads/SceneForge."); }
   }
 
-  private boolean isTrustedHost(Uri uri){
-    if(!"https".equalsIgnoreCase(uri.getScheme()))return false;
-    final String host=uri.getHost();
-    return APP_HOST.equalsIgnoreCase(host)||
-      "hatchable.com".equalsIgnoreCase(host)||
-      (host!=null&&host.toLowerCase(java.util.Locale.ROOT).endsWith(".hatchable.com"));
+  private boolean isTrustedHost(Uri uri) {
+    if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())) return false;
+    if (!APP_HOST.equalsIgnoreCase(uri.getHost())) return false;
+    if (uri.getUserInfo() != null) return false;
+    return uri.getPort() == -1 || uri.getPort() == 443;
+  }
+  private boolean isCurrentTrustedPage() {
+    return web != null && web.getUrl() != null && isTrustedHost(Uri.parse(web.getUrl()));
   }
 
   private void downloadBlob(String url,String mimeType){
-    if(web==null||web.getUrl()==null||!web.getUrl().startsWith(APP_URL))return;
+    if(!isCurrentTrustedPage())return;
     final String js="(async()=>{try{const r=await fetch("+JSONObject.quote(url)+");"+
       "const b=await r.blob();if(b.size>30000000)throw Error('File is too large');"+
       "const reader=new FileReader();reader.onloadend=()=>window.SceneForgeSave.save(String(reader.result),"+
@@ -197,9 +238,8 @@ public final class MainActivity extends Activity {
     runOnUiThread(()->web.evaluateJavascript(js,null));
   }
 
-  private final class ExportBridge {
-    @JavascriptInterface public void save(String dataUrl,String filename){
-      if(web==null||web.getUrl()==null||!web.getUrl().startsWith(APP_URL))return;
+  private void saveExport(String dataUrl,String filename) {
+      if (!isCurrentTrustedPage()) return;
       if(dataUrl==null||dataUrl.length()>42000000)return;
       int comma=dataUrl.indexOf(',');
       if(comma<10)return;
@@ -239,7 +279,6 @@ public final class MainActivity extends Activity {
         }catch(Exception e){show("Export save failed. Try opening in Chrome.");}
       });
     }
-  }
   private void show(String msg){runOnUiThread(()->Toast.makeText(this,msg,Toast.LENGTH_LONG).show());}
   @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grants){
     super.onRequestPermissionsResult(requestCode,permissions,grants);
