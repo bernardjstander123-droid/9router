@@ -17,8 +17,8 @@ Official Ansvar MCP endpoint: https://gateway.ansvar.eu/mcp; setup https://ansva
 4. Apply reviewed GitHub changes, build and run automated tests, then verify on a physical Samsung Galaxy A07.
 
 ## Existing security limitations
-- Current MainActivity exposes an addJavascriptInterface export bridge. On Android this is accessible to subframes, and inspecting the top-level URL alone cannot authenticate the calling frame. Harden origin handling before production.
-- The existing trusted host policy permits general hatchable.com subdomains; review its scope.
+- The v15 source removes the broad addJavascriptInterface export bridge and uses an origin-scoped AndroidX WebMessageListener with isMainFrame checks. This is source-level hardening, not an independently tested security guarantee. Third-party library and WebView runtime behaviors require APK and device verification.
+- Hatchable sign-in navigation still permits hatchable.com subdomains for compatibility. Only the exact sceneforge-studio.hatchable.site origin is allowed to invoke the native export endpoint. Audit the authentication redirects before public release.
 - File saving is limited to PNG/WebM/MP4 with a 30 MB byte cap, but real-device export and playback are not verified in this PR.
 - The launcher does not upload automatically to Figma, Canva or Ansvar and does not sync design files.
 - The new share chooser uses the most recent saved MediaStore file and is designed for Android 10+. Android 8-9 should use the existing export workflow.
