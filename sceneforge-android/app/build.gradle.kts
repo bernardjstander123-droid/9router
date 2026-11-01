@@ -17,3 +17,8 @@ android {
         getByName("release") { isMinifyEnabled = false }
     }
 }
+
+dependencies {
+    // Restrict the JavaScript message bridge to the exact trusted web origin.
+    implementation("androidx.webkit:webkit:1.16.0")
+}
