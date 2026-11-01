@@ -32,7 +32,9 @@ Replace node IDs with those of the actual workflow. Submission requires the orig
 Only after all 12 actual rendered clips exist and pass verification, run:
 
 ```bash
-python assemble.py --manifest shots.json --output output/episode2.mp4
+python assemble.py --manifest shots.json \
+  --render-root "renders/the-demon-god-s-awakening-episode-2" \
+  --output output/episode2.mp4
 ```
 
-The assembly command refuses missing or too-short clips and validates the finished MP4. Inspect character identity and wing count visually before any delivery; metadata checks cannot prove identity. Do not describe the offline job plan, queued records or individual shots as a completed episode.
+The worker writes clips under `renders/<project_id>/shot_XX.mp4`, whereas the manifest uses `renders/shot_XX.mp4`; `--render-root` resolves that difference without moving or overwriting originals. The assembly command refuses missing or too-short clips and validates the finished MP4. Inspect character identity and wing count visually before any delivery; metadata checks cannot prove identity. Do not describe the offline job plan, queued records or individual shots as a completed episode.
