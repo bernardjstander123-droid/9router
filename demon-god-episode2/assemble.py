@@ -43,10 +43,11 @@ def normalize(source, destination, duration, width, height, fps, has_audio):
     if abs(got - duration) > 0.4 or stream["width"] != width or stream["height"] != height or not audio:
         raise ValueError(f"Normalization failed: {source}, duration {got:.3f} vs {duration}")
 
-def assemble(manifest_path, output):
+def assemble(manifest_path, output, render_root=None):
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         raise RuntimeError("Install FFmpeg and ffprobe first")
     root = manifest_path.resolve().parent
+    render_root = Path(render_root).resolve() if render_root is not None else None
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     width, height, fps = (int(manifest[k]) for k in ("width", "height", "fps"))
     if not (0 < width <= 3840 and 0 < height <= 3840 and 0 < fps <= 120 and width % 2 == 0 and height % 2 == 0):
@@ -57,7 +58,13 @@ def assemble(manifest_path, output):
     sources = []
     expected = 0
     for shot in shots:
-        path = safe_input(root, shot.get("file"))
+        relative = shot.get("file")
+        if render_root is None:
+            path = safe_input(root, relative)
+        else:
+            if not isinstance(relative, str) or not relative.startswith("renders/") or "/" in relative[len("renders/"):]:
+                raise ValueError("Worker render override requires a direct renders/shot_XX.mp4 path")
+            path = safe_input(render_root, relative[len("renders/"):])
         target = float(shot.get("duration_seconds", 0))
         if not 0.2 <= target <= 120:
             raise ValueError(f"Invalid target duration: {path}")
@@ -96,5 +103,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", type=Path, default=Path(__file__).with_name("shots.json"))
     ap.add_argument("--output", type=Path, default=Path("output/episode2.mp4"))
+    ap.add_argument("--render-root", type=Path, help="Worker project output directory containing shot_XX.mp4")
     args = ap.parse_args()
-    assemble(args.manifest, args.output)
+    assemble(args.manifest, args.output, render_root=args.render_root)
