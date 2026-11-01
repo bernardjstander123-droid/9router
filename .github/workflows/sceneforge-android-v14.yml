@@ -1,7 +1,7 @@
 name: SceneForge Studio Android debug APK
 on:
   push:
-    branches: [sceneforge-android-v14, 'feature/sceneforge-*']
+    branches: [master, sceneforge-android-v14, 'feature/sceneforge-*']
     paths: ['sceneforge-android/**', '.github/workflows/sceneforge-android-v14.yml']
   pull_request:
     paths: ['sceneforge-android/**', '.github/workflows/sceneforge-android-v14.yml']
@@ -48,6 +48,6 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: SceneForge-v14-debug-APK
+          name: SceneForge-v15-debug-APK
           path: sceneforge-android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
