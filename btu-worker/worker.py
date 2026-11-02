@@ -6,8 +6,11 @@ Requires real ComfyUI Wan I2V API workflow, original reference, and GPU weights.
 import argparse
 import copy
 import json
+import math
 import os
+from fractions import Fraction
 from pathlib import Path
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -65,6 +68,9 @@ def eligible(record):
     for key in ("width", "height", "fps", "duration_seconds"):
         if type(p.get(key)) not in (float, int) or p[key] <= 0:
             raise Blocked("Invalid " + key)
+    if (any(type(p[k]) is not int for k in ("width", "height", "fps"))
+            or p["width"] % 2 or p["height"] % 2):
+        raise Blocked("Dimensions and fps must be whole numbers; dimensions must be even")
     if p["width"] > 3840 or p["height"] > 3840 or p["fps"] > 120 or p["duration_seconds"] > 30:
         raise Blocked("Unsafe shot limits")
     return p
@@ -123,18 +129,39 @@ def history_video(history):
                     return {"filename": name, "subfolder": sub, "type": "output"}
     raise Blocked("ComfyUI history has no saved MP4 output")
 
-def probe(path, target_seconds):
-    if not shutil.which("ffprobe"):
-        raise Blocked("ffprobe is required")
+def probe(path, target_seconds, *, width=None, height=None, fps=None):
+    """Decode the actual video and verify target duration, dimensions and fps.
+
+    A valid MP4 container alone is not proof that its frames are playable.
+    The queue must never report a truncated or wrong-sized clip as rendered.
+    """
+    if not shutil.which("ffprobe") or not shutil.which("ffmpeg"):
+        raise Blocked("ffprobe and ffmpeg are required")
     p = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
-        "format=duration:stream=codec_type,width,height", "-of", "json", str(path)],
-        capture_output=True, text=True, timeout=30)
+        "format=duration:stream=codec_type,width,height,r_frame_rate,duration",
+        "-of", "json", str(path)], capture_output=True, text=True, timeout=30)
     if p.returncode:
         raise Blocked("ffprobe rejected MP4")
-    info = json.loads(p.stdout)
-    seconds = float(info.get("format", {}).get("duration", 0))
-    if not any(s.get("codec_type") == "video" for s in info.get("streams", [])) or seconds < max(.5, target_seconds * .6):
-        raise Blocked("Video missing or shorter than 60% of requested duration")
+    try:
+        info = json.loads(p.stdout)
+        video = next(s for s in info.get("streams", []) if s.get("codec_type") == "video")
+        seconds = float(video.get("duration") or info.get("format", {}).get("duration", 0))
+        actual_fps = float(Fraction(video.get("r_frame_rate", "0/1")))
+    except (ValueError, TypeError, KeyError, StopIteration, ZeroDivisionError) as exc:
+        raise Blocked("Video stream metadata missing or invalid") from exc
+    if not math.isfinite(seconds) or seconds < max(0.5, float(target_seconds) - 0.4):
+        raise Blocked("Video missing or shorter than requested duration")
+    if width is not None and video.get("width") != width:
+        raise Blocked("Video width differs from queued settings")
+    if height is not None and video.get("height") != height:
+        raise Blocked("Video height differs from queued settings")
+    if fps is not None and (not math.isfinite(actual_fps) or abs(actual_fps - fps) > 0.5):
+        raise Blocked("Video frame rate differs from queued settings")
+    decoded = subprocess.run(["ffmpeg", "-hide_banner", "-nostdin", "-v", "error",
+        "-xerror", "-i", str(path), "-map", "0:v:0", "-f", "null", "-"],
+        capture_output=True, text=True, timeout=max(60, int(float(target_seconds) * 8)))
+    if decoded.returncode:
+        raise Blocked("Video frame decode failed")
     return seconds
 
 def download(comfy, desc, path):
@@ -178,10 +205,13 @@ class Worker:
             self.db.execute("INSERT OR REPLACE INTO meta VALUES ('cursor',?)", (value,))
 
     def render(self, record, p):
-        path = Path(self.c.output) / (record["id"] + ".mp4")
+        record_id = record.get("id")
+        if not isinstance(record_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", record_id):
+            raise Blocked("Unsafe render record ID")
+        path = Path(self.c.output) / (record_id + ".mp4")
         if path.exists():
             try:
-                probe(path, p["duration_seconds"])
+                probe(path, p["duration_seconds"], width=p["width"], height=p["height"], fps=p["fps"])
                 return path
             except Blocked:
                 path.unlink()
@@ -203,7 +233,7 @@ class Worker:
                 if status.get("completed"):
                     download(self.c.comfy, history_video(item), path)
                     try:
-                        probe(path, p["duration_seconds"])
+                        probe(path, p["duration_seconds"], width=p["width"], height=p["height"], fps=p["fps"])
                     except Exception:
                         path.unlink(missing_ok=True)
                         raise
