@@ -1,0 +1,69 @@
+name: Auren Veyl exact-face MP4 preview
+
+on:
+  push:
+    branches:
+      - feat/auren-veyl-original-face-preview-20261104
+  pull_request:
+    paths:
+      - "auren-veyl/**"
+      - ".github/workflows/auren-veyl-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg and FFprobe
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Fetch original Tripo Auren Veyl portrait
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets renders
+          curl --fail --location --silent --show-error --retry 3 \
+            --connect-timeout 15 --max-time 90 \
+            "https://tripo-public.tripo3d.ai/studio/project/be64fa7b-4c9f-461c-949e-a5371f4abcfc/white-haired-anime-male-character-with-sunglasses-teal-eyes-and-blac.webp" \
+            --output assets/auren_original.webp || \
+          curl --fail --location --silent --show-error --retry 3 \
+            --connect-timeout 15 --max-time 90 \
+            "https://cdn.creativeclaw.co/u/5c02c90d/images/45da2895-f892-4dd1-9420-034e10ba30d6.png" \
+            --output assets/auren_original.webp
+          test "$(wc -c < assets/auren_original.webp)" -ge 10000
+          file assets/auren_original.webp
+          ffprobe -v error -show_entries stream=codec_name,width,height -of default=noprint_wrappers=1 assets/auren_original.webp
+
+      - name: Render 18-second cinematic preview from exact source image
+        run: bash auren-veyl/render_ci.sh
+
+      - name: Verify real MP4 output
+        run: |
+          test -s renders/Auren_Veyl_Opening.mp4
+          ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height:format=duration -of json renders/Auren_Veyl_Opening.mp4 | tee renders/verification.json
+          python3 - <<'PY'
+          import json
+          x=json.load(open('renders/verification.json'))
+          s=x['streams'][0]
+          assert s['codec_name']=='h264',s
+          assert s['width']==1280 and s['height']==720,s
+          assert float(x['format']['duration'])>=17.5,x
+          print('Verified playable H264 preview; original portrait used as image input.')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Auren-Veyl-Original-Face-Preview-MP4
+          path: |
+            renders/Auren_Veyl_Opening.mp4
+            renders/verification.json
+          if-no-files-found: error
+          retention-days: 7
