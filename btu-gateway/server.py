@@ -15,15 +15,23 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(payload)
 
     def do_GET(self):
+        if self.path.startswith("/documents/"):
+            from document_api import handle_documents
+            return handle_documents(self)
         if self.path == "/health":
             return self.respond(200, {"service": "btu-gateway", "ready": bool(TOKEN and UPSTREAM_KEY)})
         return self.respond(404, {"error": "not_found"})
 
     def do_POST(self):
+        if self.path.startswith("/documents/"):
+            from document_api import handle_documents
+            return handle_documents(self)
         if self.path != "/jobs":
             return self.respond(404, {"error": "not_found"})
         if not TOKEN or not UPSTREAM_KEY:
