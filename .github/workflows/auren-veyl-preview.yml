@@ -30,17 +30,35 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p assets renders
-          curl --fail --location --silent --show-error --retry 3 \
-            --connect-timeout 15 --max-time 90 \
-            "https://tripo-public.tripo3d.ai/studio/project/be64fa7b-4c9f-461c-949e-a5371f4abcfc/white-haired-anime-male-character-with-sunglasses-teal-eyes-and-blac.webp" \
-            --output assets/auren_original.webp || \
-          curl --fail --location --silent --show-error --retry 3 \
-            --connect-timeout 15 --max-time 90 \
-            "https://cdn.creativeclaw.co/u/5c02c90d/images/45da2895-f892-4dd1-9420-034e10ba30d6.png" \
-            --output assets/auren_original.webp
-          test "$(wc -c < assets/auren_original.webp)" -ge 10000
+          # Try the imported original Tripo portrait, then the saved Auren reference.
+          # A successful HTTP response is not enough: reject missing or invalid images
+          # before deciding whether a fallback is required.
+          urls=(
+            "https://tripo-public.tripo3d.ai/studio/project/be64fa7b-4c9f-461c-949e-a5371f4abcfc/white-haired-anime-male-character-with-sunglasses-teal-eyes-and-blac.webp"
+            "https://cdn.creativeclaw.co/u/5c02c90d/images/45da2895-f892-4dd1-9420-034e10ba30d6.png"
+          )
+          selected=""
+          for url in "${urls[@]}"; do
+            rm -f assets/auren_original.webp
+            if curl --fail --location --silent --show-error --retry 2 \
+              --connect-timeout 15 --max-time 90 \
+              "$url" --output assets/auren_original.webp \
+              && test "$(wc -c < assets/auren_original.webp)" -ge 10000 \
+              && ffprobe -v error -select_streams v:0 -show_entries stream=width,height \
+                -of csv=p=0 assets/auren_original.webp | grep -Eq '^[0-9]+,[0-9]+$' \
+              && ffmpeg -v error -xerror -i assets/auren_original.webp -frames:v 1 -f null -; then
+              selected="$url"
+              break
+            fi
+            echo "::warning::An image source could not be decoded. Trying next saved original reference."
+          done
+          if test -z "$selected"; then
+            echo "::error::Neither saved Auren source portrait could be downloaded and decoded."
+            exit 1
+          fi
+          printf 'Image source: %s\n' "$selected" | tee renders/source_provenance.txt
+          sha256sum assets/auren_original.webp | tee -a renders/source_provenance.txt
           file assets/auren_original.webp
-          ffprobe -v error -show_entries stream=codec_name,width,height -of default=noprint_wrappers=1 assets/auren_original.webp
 
       - name: Render 18-second cinematic preview from exact source image
         run: bash auren-veyl/render_ci.sh
@@ -56,8 +74,13 @@ jobs:
           assert s['codec_name']=='h264',s
           assert s['width']==1280 and s['height']==720,s
           assert float(x['format']['duration'])>=17.5,x
-          print('Verified playable H264 preview; original portrait used as image input.')
+          print('MP4 metadata verified; performing full video decode next.')
           PY
+          # FFprobe metadata is not enough to establish that frames are decodable.
+          ffmpeg -v error -xerror -i renders/Auren_Veyl_Opening.mp4 -f null -
+          ffmpeg -v error -y -ss 9 -i renders/Auren_Veyl_Opening.mp4 -frames:v 1 renders/midpoint.jpg
+          test -s renders/midpoint.jpg
+          sha256sum renders/Auren_Veyl_Opening.mp4 | tee renders/mp4_sha256.txt
 
       - uses: actions/upload-artifact@v4
         with:
@@ -65,5 +88,8 @@ jobs:
           path: |
             renders/Auren_Veyl_Opening.mp4
             renders/verification.json
+            renders/source_provenance.txt
+            renders/mp4_sha256.txt
+            renders/midpoint.jpg
           if-no-files-found: error
           retention-days: 7
