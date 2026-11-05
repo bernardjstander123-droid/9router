@@ -16,12 +16,12 @@ export default async function handler(req,res){
   }
   if(session.role!=='owner')return reply(res,403,{error:'OWNER_ONLY'});
   if(req.method==='GET'){
-   const [apps,income]=await Promise.all([load('applications/'),load('income/')]);
+   const [apps,income,privacy]=await Promise.all([load('applications/'),load('income/'),load('privacy/')]);
    const approvals=await Promise.all(apps.map(x=>readRecord('approvals/'+x.id+'.json')));
    const merged=apps.map((a,i)=>({id:a.id,name:a.name,email:a.email,createdAt:a.createdAt,readiness:a.readiness,experience:a.experience,workspace:a.workspace,headset:a.headset,internetMbps:a.internetMbps,state:approvals[i]?'approved':a.state,agentId:approvals[i]?.agentId||null})).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
    const totals={};for(const item of income){totals[item.currency]=(totals[item.currency]||0)+item.grossMinor}
    const recent=income.sort((a,b)=>b.recordedAt.localeCompare(a.recordedAt)).slice(0,12).map(x=>({agentId:x.agentId,campaign:x.campaign,currency:x.currency,grossMinor:x.grossMinor,recordedAt:x.recordedAt,bankPayoutConfirmed:false}));
-   return reply(res,200,{role:'owner',applications:merged,verifiedTransactions:income.length,totalsMinorByCurrency:totals,recentVerifiedPayments:recent,integrations:{applicantStore:'connected',stripe:!!process.env.STRIPE_WEBHOOK_SECRET,whatsapp:false,dialer:false,email:false},coverage:'Up to 90 most recent records, not a complete financial audit',noApplicantFees:true,noGuaranteedEmployment:true});
+   return reply(res,200,{role:'owner',applications:merged,verifiedTransactions:income.length,totalsMinorByCurrency:totals,recentVerifiedPayments:recent,privacyRequests:privacy.sort((a,b)=>b.requestedAt.localeCompare(a.requestedAt)).slice(0,20).map(x=>({id:x.id,email:x.email,type:x.type,reference:x.reference,requestedAt:x.requestedAt,status:x.status})),integrations:{applicantStore:'connected',stripe:!!process.env.STRIPE_WEBHOOK_SECRET,whatsapp:false,dialer:false,email:false},coverage:'Up to 90 most recent records, not a complete financial audit',noApplicantFees:true,noGuaranteedEmployment:true});
   }
   if(req.method==='POST'){
    if(!sameOrigin(req))return reply(res,403,{error:'SAME_ORIGIN_REQUIRED'});
