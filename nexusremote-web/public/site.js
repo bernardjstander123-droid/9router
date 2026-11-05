@@ -128,6 +128,11 @@ if(page==='portal'){
    const td=make('td');add(td,'span','pill waiting','Not confirmed');tr.append(td);tbody.append(tr);
   }
  }
+ function renderPrivacy(items){
+  const tbody=$('privacyBody');if(!tbody)return;tbody.replaceChildren();
+  if(!items?.length){tableEmpty(tbody,4,'No candidate data requests have been logged.');return}
+  for(const req of items){const tr=make('tr');cell(tr,req.email);cell(tr,req.type);cell(tr,req.reference||'—','mono');cell(tr,dateString(req.requestedAt));tbody.append(tr)}
+ }
  function renderIntegrations(data){
   const info=data.integrations||{},target=$('integrationItems');target.replaceChildren();
   const pairs=[
@@ -151,7 +156,7 @@ if(page==='portal'){
   const gross=totals.length===0?'0 verified':totals.length===1?cash(totals[0][1],totals[0][0]):totals.map(([cur,val])=>cash(val,cur)).join(' · ');
   setMetrics({applications:apps.length,approved,payments:data.verifiedTransactions||0,gross,grossNote:'Gross only · not bank payouts'});
   $('lastSync').textContent='Refreshed '+new Date().toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
-  renderCandidates(apps);renderIncome(data.recentVerifiedPayments||[]);renderIntegrations(data);
+  renderCandidates(apps);renderIncome(data.recentVerifiedPayments||[]);renderPrivacy(data.privacyRequests||[]);renderIntegrations(data);
   $('overviewStatus').replaceChildren();
   const details=[['Private applicant intake','Enabled · human review required'],['Candidate placements','Portal approval only · no live campaigns'],['Payment ledger',data.integrations?.stripe?'Signed Stripe webhook configured':'Stripe sender not connected'],['WhatsApp alerts','Disabled until sender and template are approved']];
   details.forEach(([a,b])=>{const el=add($('overviewStatus'),'div','status-item');add(el,'strong','',a);add(el,'small','',b)});
