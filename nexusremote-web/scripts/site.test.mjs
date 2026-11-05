@@ -16,4 +16,4 @@ const html=readFileSync('public/index.html','utf8');assert.match(html,/NEXUSREMO
 const login=readFileSync('public/login.html','utf8');assert.match(login,/autocomplete="off"/);
 const portal=readFileSync('public/portal.html','utf8');assert.match(portal,/Verified payments/i);
 const source=readFileSync('api/portal.js','utf8');assert.match(source,/SIGN_IN_REQUIRED/);
-console.log('NEXUS_MIRROR_PORTAL_13_ASSERTIONS_PASSED');
+console.log('NEXUS_MIRROR_PORTAL_AUTH_AND_UI_ASSERTIONS_PASSED');
