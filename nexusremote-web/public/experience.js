@@ -17,7 +17,7 @@ let depth=0,scrollAngle=0,userOffset=0,targetAngle=0,currentAngle=0,selected=-1,
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function dimension(){
  const width=stage.clientWidth;
- depth=width<=380?139:width<=740?165:width<=1000?214:270;
+ depth=window.innerWidth<=485?139:window.innerWidth<=740?165:window.innerWidth<=1050?214:270;
  nodes.forEach((n,i)=>{
   n.style.transform='rotateY('+(i*72)+'deg) translateZ('+depth+'px)';
  });
@@ -134,7 +134,7 @@ function createJobCard(job){
  const card=element('article','opportunity-card');
  const header=element('header');
  header.append(element('span','job-company',job.company));
- header.append(element('span','job-score','Match '+job.score+'/100'));
+ header.append(element('span','job-score',job.score==='—'?'Saved':'Match '+job.score+'/100'));
  card.append(header);
  card.append(element('h3','',job.title));
  card.append(element('p','',job.description||'View the original listing for full details and eligibility.'));
