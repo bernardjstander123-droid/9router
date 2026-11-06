@@ -1,14 +1,14 @@
 const SOURCE='https://himalayas.app/jobs/api/search';
 const COUNTRIES=new Set(['ZA','US','GB','AU','CA']);
 const clean=(value,max=500)=>String(value||'').replace(/<[^>]+>/g,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&quot;/gi,'"').replace(/&#39;/g,"'").replace(/\s+/g,' ').trim().slice(0,max);
-function safeLink(value){try{const u=new URL(value);if(u.protocol!=='https:'||u.hostname!=='himalayas.app')return null;return u.toString()}catch{return null}}
+function safeLink(value){try{const u=new URL(value);if(u.protocol!=='https:'||u.hostname!=='himalayas.app'||u.username||u.password||u.toString().length>1800)return null;return u.toString()}catch{return null}}
 export function normalize(job,query){
  const url=safeLink(job?.applicationLink);
  if(!url)return null;
  const title=clean(job.title,130),company=clean(job.companyName,100);
  if(!title||!company)return null;
  const pub=Number(job.pubDate);
- const posted=Number.isFinite(pub)&&pub>0?new Date(pub*1000).toISOString():null;
+ const posted=Number.isFinite(pub)&&pub>0&&pub<1e10?new Date(pub*1000).toISOString():null;
  const regions=Array.isArray(job.locationRestrictions)?job.locationRestrictions.map(x=>clean(x,60)).slice(0,9):[];
  const type=clean(job.employmentType,65),description=clean(job.description,440);
  const terms=query.toLowerCase().split(/\s+/).filter(x=>x.length>2);
