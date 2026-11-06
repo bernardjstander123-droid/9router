@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --check public/site.js && node --check public/experience.js && node --check public/portal-extras.js && node --check api/opportunities.js && node scripts/test.mjs && node scripts/site.test.mjs"
+    "test": "node --check public/site.js && node --check public/experience.js && node --check public/portal-extras.js && node --check public/sw.js && node --check api/opportunities.js && node scripts/test.mjs && node scripts/site.test.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.3.0"
