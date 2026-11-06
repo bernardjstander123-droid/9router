@@ -16,4 +16,16 @@ const html=readFileSync('public/index.html','utf8');assert.match(html,/NEXUSREMO
 const login=readFileSync('public/login.html','utf8');assert.match(login,/autocomplete="off"/);
 const portal=readFileSync('public/portal.html','utf8');assert.match(portal,/Verified payments/i);
 const source=readFileSync('api/portal.js','utf8');assert.match(source,/SIGN_IN_REQUIRED/);
-console.log('NEXUS_MIRROR_PORTAL_AUTH_AND_UI_ASSERTIONS_PASSED');
+const experience=readFileSync('public/experience.js','utf8');
+const spatial=readFileSync('public/experience.css','utf8');
+assert.match(html,/id="spiralStage"/);assert.match(html,/id="opportunityResults"/);
+assert.match(experience,/pointermove/);assert.match(experience,/wheel/);
+assert.match(experience,/prefers-reduced-motion/);
+assert.match(spatial,/perspective/);
+const {normalize}=await import('../api/opportunities.js');
+const sample={title:'Customer Support Specialist',companyName:'Test Company',applicationLink:'https://himalayas.app/companies/test/jobs/customer-support',locationRestrictions:['South Africa'],pubDate:1750000000};
+assert.equal(normalize(sample,'customer support')?.title,'Customer Support Specialist');
+assert.equal(normalize({...sample,applicationLink:'https://other.example/steal'},'support'),null);
+assert.equal(normalize({...sample,applicationLink:'https://evil.example@himalayas.app/evil'},'support'),null);
+assert.equal(normalize({...sample,pubDate:1e99},'support')?.posted,null);
+console.log('NEXUS_SPATIAL_AND_OPPORTUNITY_10_CHECKS_PASSED');
