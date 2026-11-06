@@ -243,4 +243,22 @@ if(!prefersReduced&&'IntersectionObserver'in window){
  },{threshold:.05,rootMargin:'0px 0px -36px 0px'});
  document.querySelectorAll('.section-header,.division-card,.workflow-card,.readiness-card').forEach(x=>{x.classList.add('reveal-motion');observer.observe(x)});
 }
+
+/* Progressive-web-app capability: static assets only, never cache applicant or financial records. */
+if('serviceWorker'in navigator){
+ window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{}),{once:true});
+}
+let installEvent=null;
+const installButton=$('installNexusButton');
+window.addEventListener('beforeinstallprompt',ev=>{
+ ev.preventDefault();installEvent=ev;
+ if(installButton)installButton.classList.remove('hidden');
+});
+installButton?.addEventListener('click',async()=>{
+ if(!installEvent)return;
+ installEvent.prompt();
+ try{await installEvent.userChoice}catch{}
+ installEvent=null;installButton.classList.add('hidden');
+});
+window.addEventListener('appinstalled',()=>{installEvent=null;installButton?.classList.add('hidden')});
 })();
