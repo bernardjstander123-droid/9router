@@ -199,7 +199,14 @@ $('downloadJobs')?.addEventListener('click',()=>{
  const a=document.createElement('a');a.href=url;a.download='NexusRemote-Saved-Public-Opportunities.csv';a.click();
  setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
-updateSaved();if(form)searchJobs();
+updateSaved();
+if(form){
+ const explorer=$('opportunities');
+ if('IntersectionObserver'in window&&explorer){
+  const watcher=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){watcher.disconnect();searchJobs()}},{rootMargin:'180px 0px'});
+  watcher.observe(explorer);
+ }else searchJobs();
+}
 
 /* Local-only equipment guidance; not automatic candidate eligibility decisions. */
 const checker=$('readinessChecker');
