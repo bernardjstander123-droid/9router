@@ -28,4 +28,8 @@ assert.equal(normalize(sample,'customer support')?.title,'Customer Support Speci
 assert.equal(normalize({...sample,applicationLink:'https://other.example/steal'},'support'),null);
 assert.equal(normalize({...sample,applicationLink:'https://evil.example@himalayas.app/evil'},'support'),null);
 assert.equal(normalize({...sample,pubDate:1e99},'support')?.posted,null);
-console.log('NEXUS_SPATIAL_AND_OPPORTUNITY_10_CHECKS_PASSED');
+const portalExtra=readFileSync('public/portal-extras.js','utf8');
+assert.match(portalExtra,/candidateExport/);
+assert.match(portalExtra,/ownerData/);
+assert.match(readFileSync('public/portal.html','utf8'),/candidateExplorer/);
+console.log('NEXUS_SPATIAL_OPPORTUNITY_AND_OWNER_TOOLS_ASSERTIONS_PASSED');
