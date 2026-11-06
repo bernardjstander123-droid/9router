@@ -2,7 +2,7 @@ name: Build RealmForge GeoCommand APK
 on:
   workflow_dispatch:
   push:
-    branches: [realmforge-geocommand-android]
+    branches: [realmforge-geocommand-v3-clean]
     paths:
       - 'RealmForgeGeoCommand/**'
       - '.github/workflows/realmforge-geocommand-apk.yml'
