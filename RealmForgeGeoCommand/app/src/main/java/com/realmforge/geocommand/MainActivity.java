@@ -18,12 +18,15 @@ public class MainActivity extends Activity {
   webView.getSettings().setJavaScriptEnabled(true);
   webView.getSettings().setDomStorageEnabled(true);
   webView.getSettings().setGeolocationEnabled(true);
+  webView.getSettings().setAllowFileAccess(false);
+  webView.getSettings().setAllowContentAccess(false);
   final WebViewAssetLoader loader=new WebViewAssetLoader.Builder().addPathHandler("/assets/",new WebViewAssetLoader.AssetsPathHandler(this)).build();
   webView.setWebViewClient(new WebViewClient(){
    @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view,android.webkit.WebResourceRequest request){return loader.shouldInterceptRequest(request.getUrl());}
   });
   webView.setWebChromeClient(new WebChromeClient(){
    @Override public void onGeolocationPermissionsShowPrompt(String origin,GeolocationPermissions.Callback callback){
+    if(!"https://appassets.androidplatform.net".equals(origin)){callback.invoke(origin,false,false);return;}
     if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED||checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED){callback.invoke(origin,true,false);}
     else{pendingCallback=callback;pendingOrigin=origin;requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},LOCATION_REQUEST);}
    }
