@@ -1,0 +1,20 @@
+name: RealmForge Local Video Checks
+on:
+  push:
+    paths:
+      - 'realmforge/local-video/**'
+      - '.github/workflows/realmforge-local-video.yml'
+  pull_request:
+    paths:
+      - 'realmforge/local-video/**'
+      - '.github/workflows/realmforge-local-video.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: python -m unittest discover -s realmforge/local-video/tests -v
