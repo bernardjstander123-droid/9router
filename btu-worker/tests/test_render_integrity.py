@@ -50,8 +50,10 @@ class RenderIntegrityTests(unittest.TestCase):
 
     def test_unsafe_record_id_rejected_before_file_access(self):
         dummy = SimpleNamespace(output=self.root)
-        with self.assertRaisesRegex(worker.Blocked, "record ID"):
-            worker.Worker.render(dummy, {"id": "../escape"}, {})
+        for record_id in ("../escape", "bad/name", "", "a" * 129, 123, None):
+            with self.subTest(record_id=record_id):
+                with self.assertRaisesRegex(worker.Blocked, "record ID"):
+                    worker.Worker.render(dummy, {"id": record_id}, {})
 
 
 class QueueValidationTests(unittest.TestCase):
